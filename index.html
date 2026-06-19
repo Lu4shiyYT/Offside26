@@ -5084,3 +5084,698 @@ const App = (() => {
     }
     container.innerHTML = `
       <div class="squad-list-wrap">
+        ${state.collection.map(p => {
+          const inSquad = state.squad.some(s => s && s.uid === p.uid);
+          const rc = getRatingClass(p.rating);
+          return `
+            <div class="squad-list-item" onclick="App.openPlayerDetail(${p.uid})">
+              <div class="squad-list-card rating-${rc}">
+                <div class="squad-list-rating">${p.rating}</div>
+                <div class="squad-list-emoji">${p.emoji}</div>
+              </div>
+              <div class="squad-list-info">
+                <div class="squad-list-name">${p.name}</div>
+                <div class="squad-list-meta">${p.nation} · ${p.club} · ${p.pos}</div>
+              </div>
+              <div class="squad-list-right">
+                ${inSquad
+                  ? `<span class="squad-in-badge">В составе</span>`
+                  : `<button class="btn-add-squad"
+                       onclick="event.stopPropagation(); App.addToSquad(${p.uid})">
+                       + В состав
+                     </button>`
+                }
+              </div>
+            </div>`;
+        }).join('')}
+      </div>`;
+  }
+
+  function renderBenchView(container) {
+    container.innerHTML = `
+      <div class="bench-wrap">
+        <div class="bench-title">Скамейка запасных</div>
+        ${state.bench.length === 0
+          ? `<div class="bench-empty">
+               <div style="font-size:36px">🪑</div>
+               <div>Скамейка пуста</div>
+               <div style="font-size:12px;color:var(--text-muted);margin-top:6px">
+                 Добавьте игроков из коллекции
+               </div>
+             </div>`
+          : state.bench.map(p => `
+              <div class="squad-list-item">
+                <div class="squad-list-card rating-${getRatingClass(p.rating)}">
+                  <div class="squad-list-rating">${p.rating}</div>
+                  <div class="squad-list-emoji">${p.emoji}</div>
+                </div>
+                <div class="squad-list-info">
+                  <div class="squad-list-name">${p.name}</div>
+                  <div class="squad-list-meta">${p.pos} · OVR ${p.rating}</div>
+                </div>
+                <button class="btn-add-squad"
+                  onclick="App.moveToSquad(${p.uid})">В состав</button>
+              </div>`).join('')
+        }
+        <div style="margin-top:16px;text-align:center">
+          <button class="btn-secondary" onclick="App.showScreen('market')">
+            🏪 Найти игроков
+          </button>
+        </div>
+      </div>`;
+  }
+
+  function setFormation(f) {
+    state.formation = f;
+    saveState();
+    renderSquad();
+    showToast(`Схема изменена: ${f}`, 'info');
+  }
+
+  function fieldSlotClick(idx) {
+    const player = state.squad[idx];
+    if (player) {
+      openPlayerDetail(player.uid);
+    } else {
+      // Показать список для добавления
+      const slot = FORMATIONS[state.formation].positions[idx];
+      const available = state.collection.filter(p =>
+        !state.squad.some(s => s && s.uid === p.uid) &&
+        p.pos === slot.pos
+      );
+      if (available.length === 0) {
+        showToast(`Нет доступных игроков для позиции ${slot.pos}`, 'warning');
+        return;
+      }
+      openModal(`Выбор игрока — ${slot.pos}`, `
+        <div class="field-slot-pick-list">
+          ${available.map(p => `
+            <div class="field-slot-pick-item"
+                 onclick="App.assignToSlot(${idx}, ${p.uid})">
+              <div class="squad-list-card rating-${getRatingClass(p.rating)}"
+                   style="width:44px;height:44px;flex-shrink:0">
+                <div class="squad-list-rating">${p.rating}</div>
+                <div class="squad-list-emoji">${p.emoji}</div>
+              </div>
+              <div class="squad-list-info">
+                <div class="squad-list-name">${p.name}</div>
+                <div class="squad-list-meta">${p.nation} · ${p.club}</div>
+              </div>
+            </div>`).join('')}
+        </div>
+      `);
+    }
+  }
+
+  function assignToSlot(idx, uid) {
+    const player = state.collection.find(p => p.uid === uid);
+    if (!player) return;
+    // Убрать из другого слота если уже в составе
+    state.squad = state.squad.map(s => (s && s.uid === uid) ? null : s);
+    state.squad[idx] = player;
+    saveState();
+    closeModal();
+    renderSquad();
+    updateUI();
+    showToast(`✅ ${player.name} поставлен на позицию`, 'success');
+  }
+
+  function moveToSquad(uid) {
+    const player = state.bench.find(p => p.uid === uid);
+    if (!player) return;
+    if (state.squad.length >= 11) {
+      showToast('Состав уже заполнен (11 игроков)', 'warning');
+      return;
+    }
+    state.bench  = state.bench.filter(p => p.uid !== uid);
+    state.squad.push(player);
+    saveState();
+    updateUI();
+    renderSquad();
+    showToast(`${player.name} переведён в основной состав`, 'success');
+  }
+
+  // ----------------------------------------------------------
+  //  КВЕСТЫ
+  // ----------------------------------------------------------
+
+  let questTabCurrent = 'daily';
+
+  function renderQuests() {
+    questTab(questTabCurrent);
+  }
+
+  function questTab(tab, el) {
+    questTabCurrent = tab;
+    document.querySelectorAll('.quest-tab-btn').forEach(b => b.classList.remove('active'));
+    if (el) el.classList.add('active');
+
+    const list = document.getElementById('quests-list');
+    if (!list) return;
+
+    const quests = QUESTS_DATA[tab] || [];
+    list.innerHTML = quests.map(q => {
+      const prog    = state.questProgress[q.id] || 0;
+      const pct     = Math.min(100, Math.round((prog / q.target) * 100));
+      const claimed = state.claimedQuests.includes(q.id);
+      const ready   = !claimed && prog >= q.target;
+
+      const rewardStr = Object.entries(q.reward)
+        .map(([k,v]) => {
+          const icons = { coins:'🪙', xp:'⭐', gems:'🔮', points:'💎' };
+          return `${icons[k]||''}${formatNum(v)}`;
+        }).join('  ');
+
+      return `
+        <div class="quest-item ${claimed ? 'claimed' : ''} ${ready ? 'ready' : ''}">
+          <div class="quest-icon-wrap">${q.icon}</div>
+          <div class="quest-info">
+            <div class="quest-title">${q.title}
+              ${claimed ? '<span class="quest-done-tag">✓ Выполнено</span>' : ''}
+              ${ready   ? '<span class="quest-ready-tag">Забрать!</span>'   : ''}
+            </div>
+            <div class="quest-desc">${q.desc}</div>
+            <div class="quest-progress-wrap">
+              <div class="quest-progress-bar-bg">
+                <div class="quest-progress-bar-fill" style="width:${pct}%"></div>
+              </div>
+              <div class="quest-progress-text">${prog} / ${q.target}</div>
+            </div>
+            <div class="quest-reward-row">${rewardStr}</div>
+          </div>
+          ${ready ? `
+            <button class="btn-claim-quest"
+                    onclick="App.claimQuest('${q.id}')">
+              Забрать
+            </button>` : ''}
+        </div>`;
+    }).join('');
+
+    if (quests.length === 0) {
+      list.innerHTML = `
+        <div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
+          <div style="font-size:40px">📋</div>
+          <div>Нет заданий</div>
+        </div>`;
+    }
+  }
+
+  function renderDailyQuestsMini() {
+    const el = document.getElementById('daily-quests-mini');
+    if (!el) return;
+    const quests = QUESTS_DATA.daily.slice(0, 3);
+    el.innerHTML = quests.map(q => {
+      const prog  = state.questProgress[q.id] || 0;
+      const pct   = Math.min(100, Math.round((prog / q.target) * 100));
+      const done  = state.claimedQuests.includes(q.id);
+      return `
+        <div class="quest-mini-item ${done ? 'done' : ''}">
+          <span class="quest-mini-icon">${q.icon}</span>
+          <div class="quest-mini-info">
+            <div class="quest-mini-title">${q.title}</div>
+            <div class="quest-mini-bar-bg">
+              <div class="quest-mini-bar-fill" style="width:${pct}%"></div>
+            </div>
+          </div>
+          <span class="quest-mini-pct">${done ? '✓' : pct + '%'}</span>
+        </div>`;
+    }).join('');
+  }
+
+  function claimQuest(id) {
+    const allQ = [...QUESTS_DATA.daily, ...QUESTS_DATA.weekly, ...QUESTS_DATA.season];
+    const quest = allQ.find(q => q.id === id);
+    if (!quest) return;
+    if (state.claimedQuests.includes(id)) { showToast('Уже получено', 'warning'); return; }
+    const prog = state.questProgress[id] || 0;
+    if (prog < quest.target) { showToast('Задание не выполнено', 'error'); return; }
+
+    state.claimedQuests.push(id);
+    if (quest.reward.coins)  addCoins(quest.reward.coins);
+    if (quest.reward.xp)     addXP(quest.reward.xp);
+    if (quest.reward.gems)   addGems(quest.reward.gems);
+    if (quest.reward.points) addPoints(quest.reward.points);
+
+    saveState();
+    updateUI();
+    showToast(`🎁 Награда получена: ${quest.title}!`, 'success');
+    renderQuests();
+  }
+
+  function updateQuestProgress(type, amount) {
+    const typeMap = {
+      match_play:  ['d1','d3','d5','w1','s1'],
+      match_win:   ['d2','d5','w2','s2'],
+      goal:        ['d3','w2'],
+      market_buy:  ['d4','w4','s3'],
+    };
+    const ids = typeMap[type] || [];
+    ids.forEach(id => {
+      if (!state.claimedQuests.includes(id)) {
+        state.questProgress[id] = (state.questProgress[id] || 0) + amount;
+      }
+    });
+    saveState();
+    updateUI();
+  }
+
+  // ----------------------------------------------------------
+  //  ЛИГИ
+  // ----------------------------------------------------------
+
+  function renderLeagues() {
+    const grid = document.getElementById('leagues-grid');
+    if (!grid) return;
+
+    grid.innerHTML = LEAGUES_DATA.map(league => {
+      const isCurrent = state.currentLeague === league.id;
+      const isLocked  = league.locked && state.leaguePoints < league.req;
+      return `
+        <div class="league-card ${isCurrent ? 'current' : ''} ${isLocked ? 'locked' : ''}"
+             onclick="${!isLocked ? `App.enterLeague('${league.id}')` : 'App.showToast(\'Недостаточно очков лиги\',\'warning\')'}">
+          <div class="league-trophy">${league.trophy}</div>
+          <div class="league-name">${league.name}</div>
+          <div class="league-req">
+            ${isLocked
+              ? `🔒 Нужно ${formatNum(league.req)} очков`
+              : isCurrent
+                ? '▶ Текущая лига'
+                : `✅ Доступна`}
+          </div>
+          <div class="league-reward">🪙 ${formatNum(league.reward)}</div>
+          ${isCurrent ? '<div class="league-current-badge">ТЕКУЩАЯ</div>' : ''}
+        </div>`;
+    }).join('');
+  }
+
+  function enterLeague(id) {
+    state.currentLeague = id;
+    saveState();
+    showToast(`Вы вошли в лигу: ${LEAGUES_DATA.find(l=>l.id===id)?.name}`, 'success');
+    showScreen('match');
+  }
+
+  // ----------------------------------------------------------
+  //  МАГАЗИН
+  // ----------------------------------------------------------
+
+  let storeCat = 'all';
+
+  function renderStore() {
+    storeCategory(storeCat);
+  }
+
+  function storeCategory(cat, el) {
+    storeCat = cat;
+    document.querySelectorAll('.store-cat-btn').forEach(b => b.classList.remove('active'));
+    if (el) el.classList.add('active');
+
+    const grid = document.getElementById('store-grid');
+    if (!grid) return;
+
+    let items = [...STORE_ITEMS];
+    if (cat !== 'all') items = items.filter(i => i.category === cat);
+
+    grid.innerHTML = items.map(item => {
+      const badgeHTML = item.badge
+        ? `<div class="store-item-badge badge-${item.badge}">
+             ${{hot:'🔥 ХИТ', limited:'⏳ ЛИМИТ', sale:'💥 СКИДКА', new:'✨ НОВИНКА'}[item.badge] || item.badge}
+           </div>` : '';
+
+      const priceHTML = item.currency === 'real'
+        ? `<span class="store-price-real">${item.price}₽</span>`
+        : item.currency === 'gems'
+          ? `<span class="store-price-gems">🔮 ${item.price}</span>`
+          : `<span class="store-price-coins">🪙 ${formatNum(item.price)}</span>`;
+
+      return `
+        <div class="store-item animate-slide-up" onclick="App.buyStoreItem('${item.id}')">
+          ${badgeHTML}
+          <div class="store-item-icon">${item.icon}</div>
+          <div class="store-item-name">${item.name}</div>
+          <div class="store-item-desc">${item.desc}</div>
+          <div class="store-item-price">${priceHTML}</div>
+          <button class="btn-store-buy">Купить</button>
+        </div>`;
+    }).join('');
+  }
+
+  function showStore(type) {
+    showScreen('store');
+    const catMap = { coins:'coins', points:'all', gems:'gems' };
+    storeCategory(catMap[type] || 'all');
+  }
+
+  function buyStoreItem(id) {
+    const item = STORE_ITEMS.find(i => i.id === id);
+    if (!item) return;
+
+    if (item.currency === 'real') {
+      showToast('💳 Переход к оплате... (демо)', 'info');
+      return;
+    }
+
+    if (item.category === 'packs') {
+      openModal('Купить пак', `
+        <div class="confirm-purchase-info">
+          <div class="confirm-item-icon">${item.icon}</div>
+          <div class="confirm-item-details">
+            <div class="confirm-item-name">${item.name}</div>
+            <div class="confirm-item-desc">${item.desc}</div>
+          </div>
+        </div>
+        <div class="confirm-price-row">
+          <span class="confirm-price-label">Стоимость</span>
+          <span class="confirm-price-val">
+            ${item.currency === 'gems' ? '🔮' : '🪙'} ${formatNum(item.price)}
+          </span>
+        </div>
+        <div class="confirm-balance-row">
+          <span>Баланс после покупки:</span>
+          <span class="confirm-balance-after">
+            ${item.currency === 'gems' ? '🔮' : '🪙'}
+            ${formatNum(item.currency === 'gems'
+              ? state.gems - item.price
+              : state.coins - item.price)}
+          </span>
+        </div>
+        <div class="confirm-btns">
+          <button class="btn-confirm-cancel" onclick="App.closeModal()">Отмена</button>
+          <button class="btn-confirm-ok"
+                  onclick="App.confirmBuyPack('${item.id}')">Купить ✓</button>
+        </div>
+      `);
+    } else if (item.coins) {
+      if (!spendGems(item.price)) return;
+      addCoins(item.coins);
+      showToast(`✅ +${formatNum(item.coins)} монет!`, 'success');
+    } else if (item.gems) {
+      addGems(item.gems);
+      showToast(`✅ +${item.gems} кристаллов!`, 'success');
+    } else if (item.special === 'starpass') {
+      state.starPassPremium = true;
+      saveState();
+      showToast('⭐ Star Pass Premium активирован!', 'success');
+    }
+  }
+
+  function confirmBuyPack(id) {
+    const item = STORE_ITEMS.find(i => i.id === id);
+    if (!item) return;
+
+    const paid = item.currency === 'gems'
+      ? spendGems(item.price)
+      : spendCoins(item.price);
+    if (!paid) return;
+
+    closeModal();
+    openPackOpening(item);
+  }
+
+  // ----------------------------------------------------------
+  //  ОТКРЫТИЕ ПАКА
+  // ----------------------------------------------------------
+
+  let packSession = { items:[], current:0, packData:null };
+
+  function openPackOpening(packData) {
+    if (!packData) {
+      packData = STORE_ITEMS.find(i => i.id === 'pack_gold');
+    }
+
+    const count   = packData.count || 5;
+    const minR    = packData.minRating || 70;
+    const maxR    = packData.maxRating || 85;
+    const players = [];
+
+    for (let i = 0; i < count; i++) {
+      players.push(getRandomPlayer(minR, maxR));
+    }
+
+    packSession = { items: players, current: 0, packData };
+
+    // Добавить в коллекцию
+    players.forEach(p => {
+      const exists = state.collection.some(c => c.name === p.name && c.rating === p.rating);
+      if (!exists) state.collection.push({ ...p, uid: Date.now() + rand(1,99999) });
+    });
+
+    updateQuestProgress('market_buy', players.length);
+    saveState();
+    updateUI();
+    showScreen('pack-open');
+    renderPackCard();
+  }
+
+  function renderPackCard() {
+    const stage = document.getElementById('pack-card-stage');
+    const hint  = document.getElementById('pack-open-hint');
+    if (!stage) return;
+
+    const idx = packSession.current;
+    if (idx >= packSession.items.length) return;
+
+    const p  = packSession.items[idx];
+    const rc = getRatingClass(p.rating);
+
+    stage.innerHTML = `
+      <div class="pack-card-flip" id="pack-flip-card" onclick="App.revealPackCard()">
+        <div class="pack-card-front">
+          <div class="pack-mystery-icon">📦</div>
+          <div class="pack-mystery-text">Нажмите!</div>
+        </div>
+        <div class="pack-card-back rating-${rc}">
+          <div class="pack-revealed-rating">${p.rating}</div>
+          <div class="pack-revealed-emoji">${p.emoji}</div>
+          <div class="pack-revealed-name">${p.name}</div>
+          <div class="pack-revealed-pos">${p.pos}</div>
+          <div class="pack-revealed-club">${p.nation} ${p.club}</div>
+        </div>
+      </div>`;
+
+    document.getElementById('pack-open-title').textContent =
+      `${packSession.packData?.name || 'Пак'} (${idx+1}/${packSession.items.length})`;
+
+    if (hint) hint.style.display = 'block';
+    document.getElementById('btn-pack-next')?.style && (document.getElementById('btn-pack-next').style.display   = 'none');
+    document.getElementById('btn-pack-finish')?.style && (document.getElementById('btn-pack-finish').style.display = 'none');
+  }
+
+  function revealPackCard() {
+    const card = document.getElementById('pack-flip-card');
+    if (!card) return;
+    card.classList.add('flipped');
+
+    const p  = packSession.items[packSession.current];
+    const rc = getRatingClass(p.rating);
+
+    // Добавить в сетку результатов
+    const grid = document.getElementById('pack-results-grid');
+    if (grid) {
+      const el = document.createElement('div');
+      el.className = `pack-result-mini rating-${rc} animate-scale-in`;
+      el.innerHTML = `
+        <div class="pack-result-rating">${p.rating}</div>
+        <div class="pack-result-emoji">${p.emoji}</div>
+        <div class="pack-result-name">${p.name.split(' ')[0]}</div>`;
+      grid.appendChild(el);
+    }
+
+    document.getElementById('pack-open-hint').style.display = 'none';
+
+    if (packSession.current < packSession.items.length - 1) {
+      document.getElementById('btn-pack-next').style.display = 'inline-block';
+    } else {
+      document.getElementById('btn-pack-finish').style.display = 'inline-block';
+    }
+
+    // Эффект для редких карт
+    if (p.rating >= 88) spawnConfetti();
+  }
+
+  function nextPackCard() {
+    packSession.current++;
+    renderPackCard();
+  }
+
+  function finishPackOpen() {
+    document.getElementById('pack-results-grid').innerHTML = '';
+    showScreen('squad');
+    showToast(`✅ Пак открыт! Получено ${packSession.items.length} игроков`, 'success');
+  }
+
+  // ----------------------------------------------------------
+  //  МАТЧ
+  // ----------------------------------------------------------
+
+  const MATCH_MODES_DATA = [
+    { id:'quick',      name:'Быстрый матч',     icon:'⚡', desc:'Случайный соперник',         difficulty:1  },
+    { id:'ranked',     name:'Рейтинговый',       icon:'🏆', desc:'Влияет на рейтинг лиги',    difficulty:2  },
+    { id:'friendly',   name:'Товарищеский',      icon:'🤝', desc:'Без влияния на рейтинг',    difficulty:1  },
+    { id:'cup',        name:'Кубковый',           icon:'🥇', desc:'Турнирный матч',             difficulty:3  },
+    { id:'champions',  name:'Лига Чемпионов',    icon:'⭐', desc:'Элитный уровень',            difficulty:4  },
+    { id:'training',   name:'Тренировка',         icon:'🎯', desc:'Прокачай команду',           difficulty:0  },
+  ];
+
+  function renderMatchModes() {
+    const grid = document.getElementById('match-modes-grid');
+    if (!grid) return;
+
+    grid.innerHTML = MATCH_MODES_DATA.map(mode => {
+      const stars = '⭐'.repeat(Math.max(1, mode.difficulty)) || '🎯';
+      return `
+        <div class="match-mode-card animate-slide-up"
+             onclick="App.startMatch('${mode.id}')">
+          <div class="match-mode-icon">${mode.icon}</div>
+          <div class="match-mode-name">${mode.name}</div>
+          <div class="match-mode-desc">${mode.desc}</div>
+          <div class="match-mode-diff">${stars}</div>
+        </div>`;
+    }).join('');
+  }
+
+  // ----------------------------------------------------------
+  //  СИМУЛЯЦИЯ МАТЧА
+  // ----------------------------------------------------------
+
+  let matchState = {
+    homeScore: 0,
+    awayScore: 0,
+    time: 0,
+    timer: null,
+    paused: false,
+    mode: 'quick',
+    events: [],
+    homeOvr: 75,
+    awayOvr: 73,
+  };
+
+  function startMatch(mode) {
+    const myOvr   = calcOvr(state.squad) || 70;
+    const awayOvr = myOvr + rand(-8, 8);
+
+    matchState = {
+      homeScore: 0,
+      awayScore: 0,
+      time:      0,
+      timer:     null,
+      paused:    false,
+      mode,
+      events:    [],
+      homeOvr:   myOvr,
+      awayOvr:   Math.max(60, Math.min(99, awayOvr)),
+    };
+
+    const opponents = ['FC Galaxy','Red Lions','Storm FC','Blue Eagles',
+                       'Iron Bulls','Night Wolves','Solar FC','Desert Kings'];
+    const oppName = opponents[rand(0, opponents.length-1)];
+
+    setText('sim-home-name', state.nick.substring(0,12));
+    setText('sim-away-name', oppName);
+    setText('sim-home-ovr',  `OVR ${myOvr}`);
+    setText('sim-away-ovr',  `OVR ${matchState.awayOvr}`);
+    setText('sim-score',     '0 : 0');
+    setText('sim-time',      '0\'');
+    setText('sim-status',    '🟢 Начало матча');
+
+    const feed = document.getElementById('match-event-feed');
+    if (feed) feed.innerHTML = '';
+
+    showScreen('match-sim');
+    runMatchSim();
+  }
+
+  function runMatchSim() {
+    const totalTime = 90;
+    const tickMs    = 300;
+    const tickMin   = 1;
+
+    matchState.timer = setInterval(() => {
+      if (matchState.paused) return;
+
+      matchState.time += tickMin;
+      setText('sim-time', `${matchState.time}'`);
+
+      // Случайное событие каждые 3–8 минут
+      if (matchState.time % rand(3, 8) === 0) {
+        generateMatchEvent();
+      }
+
+      // Передвинуть мяч
+      const bx = rand(20, 80);
+      const by = rand(20, 80);
+      const ball = document.getElementById('match-ball');
+      if (ball) { ball.style.left = bx + '%'; ball.style.top = by + '%'; }
+
+      if (matchState.time >= totalTime) {
+        clearInterval(matchState.timer);
+        finishMatch();
+      }
+    }, tickMs);
+  }
+
+  function generateMatchEvent() {
+    const homePower  = matchState.homeOvr / (matchState.homeOvr + matchState.awayOvr);
+    const isHomeAtk  = Math.random() < homePower;
+    const isGoal     = Math.random() < 0.22;
+    const eventText  = MATCH_EVENTS[rand(0, MATCH_EVENTS.length-1)];
+
+    let msg = '';
+    if (isGoal) {
+      if (isHomeAtk) {
+        matchState.homeScore++;
+        const scorer = state.squad[rand(0, state.squad.length-1)];
+        msg = `⚽ ГОООЛ! ${scorer ? scorer.name : 'Игрок'} забивает! (${matchState.homeScore}:${matchState.awayScore})`;
+        updateQuestProgress('goal', 1);
+      } else {
+        matchState.awayScore++;
+        msg = `😱 Гол в наши ворота! (${matchState.homeScore}:${matchState.awayScore})`;
+      }
+      setText('sim-score', `${matchState.homeScore} : ${matchState.awayScore}`);
+    } else {
+      msg = `${matchState.time}' — ${eventText}`;
+    }
+
+    setText('sim-status', isGoal ? '⚽ ГОООЛ!' : '🏃 В игре...');
+
+    const feed = document.getElementById('match-event-feed');
+    if (feed) {
+      const el = document.createElement('div');
+      el.className = `match-event-item ${isGoal ? 'goal-event' : ''} animate-slide-up`;
+      el.textContent = msg;
+      feed.insertBefore(el, feed.firstChild);
+      if (feed.children.length > 8) feed.lastChild.remove();
+    }
+  }
+
+  function skipMatch() {
+    clearInterval(matchState.timer);
+    // Досимулировать оставшееся время
+    const remaining = 90 - matchState.time;
+    const extraEvents = Math.floor(remaining / 5);
+    for (let i = 0; i < extraEvents; i++) {
+      const homePower = matchState.homeOvr / (matchState.homeOvr + matchState.awayOvr);
+      if (Math.random() < 0.18) {
+        if (Math.random() < homePower) matchState.homeScore++;
+        else matchState.awayScore++;
+      }
+    }
+    matchState.time = 90;
+    setText('sim-score', `${matchState.homeScore} : ${matchState.awayScore}`);
+    finishMatch();
+  }
+
+  function togglePause() {
+    matchState.paused = !matchState.paused;
+    const btn = document.getElementById('btn-sim-pause');
+    if (btn) btn.textContent = matchState.paused ? '▶' : '⏸';
+    setText('sim-status', matchState.paused ? '⏸ Пауза' : '🏃 В игре...');
+  }
+
+  function finishMatch() {
+    clearInterval(matchState.timer);
+    const h = matchState.homeScore;
+    const a = matchState.awayScore;
+
+    let result, resultClass;
+    let coinsEarned = 0, xpEar

@@ -1,1 +1,5589 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Offside FC</title>
+  <style>
+    /* ============================================================
+       СБРОС СТИЛЕЙ И БАЗОВЫЕ ПЕРЕМЕННЫЕ
+       Устанавливаем CSS-переменные для всей цветовой схемы игры
+       ============================================================ */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
 
+    :root {
+      /* Основная тёмная палитра */
+      --bg-primary:   #0a0a14;
+      --bg-secondary: #12121f;
+      --bg-card:      #1a1a2e;
+      --bg-card-2:    #16213e;
+
+      /* Акцентные цвета */
+      --accent-orange: #ff6b35;
+      --accent-pink:   #ff3b7a;
+      --accent-purple: #7b2fff;
+      --accent-blue:   #00b4d8;
+      --accent-gold:   #ffd700;
+
+      /* Градиенты */
+      --grad-main:   linear-gradient(135deg, #ff6b35, #ff3b7a);
+      --grad-purple: linear-gradient(135deg, #7b2fff, #ff3b7a);
+      --grad-blue:   linear-gradient(135deg, #00b4d8, #7b2fff);
+      --grad-gold:   linear-gradient(135deg, #ffd700, #ff6b35);
+      --grad-green:  linear-gradient(135deg, #00c853, #00b4d8);
+
+      /* Текст */
+      --text-primary:   #ffffff;
+      --text-secondary: #a0a0c0;
+      --text-muted:     #606080;
+
+      /* Границы */
+      --border-color: rgba(255,255,255,0.08);
+
+      /* Размеры */
+      --bottom-nav-height: 64px;
+      --header-height: 120px;
+      --border-radius: 12px;
+      --border-radius-lg: 20px;
+
+      /* Тени */
+      --shadow-card: 0 4px 24px rgba(0,0,0,0.4);
+      --shadow-glow-orange: 0 0 20px rgba(255,107,53,0.3);
+      --shadow-glow-purple: 0 0 20px rgba(123,47,255,0.3);
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+    }
+
+    /* ============================================================
+       КОНТЕЙНЕР ПРИЛОЖЕНИЯ
+       Центрирует игру на десктопе, ограничивает ширину 480px
+       ============================================================ */
+    #app {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      height: 100%;
+      margin: 0 auto;
+      background: var(--bg-primary);
+      overflow: hidden;
+      box-shadow: 0 0 60px rgba(0,0,0,0.8);
+    }
+
+    /* ============================================================
+       СИСТЕМА ЭКРАНОВ
+       Каждый экран — полноэкранный div, скрытый по умолчанию
+       ============================================================ */
+    .screen {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: var(--bg-primary);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      opacity: 0;
+      transform: translateX(30px);
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      z-index: 1;
+    }
+
+    /* Активный экран видим и доступен для взаимодействия */
+    .screen.active {
+      opacity: 1;
+      transform: translateX(0);
+      pointer-events: all;
+      z-index: 10;
+    }
+
+    /* Экран уходит влево при навигации "вперёд" */
+    .screen.leaving {
+      opacity: 0;
+      transform: translateX(-30px);
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    /* Область прокрутки внутри экрана */
+    .screen-content {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-bottom: calc(var(--bottom-nav-height) + 16px);
+      scrollbar-width: none;
+    }
+    .screen-content::-webkit-scrollbar { display: none; }
+
+    /* ============================================================
+       ШАПКА ИГРЫ (HEADER)
+       Отображается на главном меню и основных экранах
+       ============================================================ */
+    .game-header {
+      flex-shrink: 0;
+      background: var(--bg-secondary);
+      padding: 12px 16px 8px;
+      border-bottom: 1px solid var(--border-color);
+      z-index: 100;
+    }
+
+    /* Верхняя строка шапки: аватар + инфо + валюты */
+    .header-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    /* Аватар профиля */
+    .profile-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--grad-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      cursor: pointer;
+      flex-shrink: 0;
+      border: 2px solid var(--accent-orange);
+      box-shadow: var(--shadow-glow-orange);
+      transition: transform 0.2s;
+    }
+    .profile-avatar:active { transform: scale(0.92); }
+
+    /* OVR рядом с аватаром */
+    .profile-ovr {
+      background: var(--grad-gold);
+      color: #000;
+      font-weight: 900;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 6px;
+      margin-top: 2px;
+      display: inline-block;
+    }
+
+    /* Блок с именем и XP */
+    .profile-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .profile-name {
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .profile-level {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    /* Полоска XP */
+    .xp-bar-container {
+      height: 4px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .xp-bar-fill {
+      height: 100%;
+      background: var(--grad-main);
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+
+    /* Блок валют в шапке */
+    .header-currencies {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .currency-pill {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 4px 10px 4px 4px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .currency-pill:active { background: rgba(255,255,255,0.12); }
+    .currency-pill img {
+      width: 20px;
+      height: 20px;
+      object-fit: contain;
+    }
+    .currency-pill span {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .currency-pill .currency-add {
+      background: var(--accent-orange);
+      color: #fff;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      margin-left: 2px;
+    }
+
+    /* ============================================================
+       НИЖНЯЯ НАВИГАЦИЯ
+       5 вкладок фиксированной высоты внизу экрана
+       ============================================================ */
+    .bottom-nav {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: var(--bottom-nav-height);
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      z-index: 1000;
+      backdrop-filter: blur(10px);
+    }
+
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      padding: 8px 12px;
+      cursor: pointer;
+      border-radius: 12px;
+      transition: background 0.2s;
+      min-width: 52px;
+    }
+    .nav-item:active { background: rgba(255,255,255,0.08); }
+    .nav-item .nav-icon { font-size: 22px; }
+    .nav-item .nav-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .nav-item.active .nav-label { color: var(--accent-orange); }
+    .nav-item.active .nav-icon { filter: drop-shadow(0 0 6px var(--accent-orange)); }
+
+    /* ============================================================
+       ЭКРАН ЗАГРУЗКИ (SPLASH SCREEN)
+       Показывается при первом запуске игры
+       ============================================================ */
+    #screen-splash {
+      background: var(--bg-primary);
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .splash-logo {
+      text-align: center;
+    }
+    .splash-logo-text {
+      font-size: 48px;
+      font-weight: 900;
+      background: var(--grad-main);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -2px;
+    }
+    .splash-logo-sub {
+      font-size: 14px;
+      color: var(--text-secondary);
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+    .splash-loader {
+      margin-top: 48px;
+      display: flex;
+      gap: 8px;
+    }
+    .splash-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent-orange);
+      animation: splash-bounce 1.2s infinite ease-in-out;
+    }
+    .splash-dot:nth-child(2) { background: var(--accent-pink); animation-delay: 0.2s; }
+    .splash-dot:nth-child(3) { background: var(--accent-purple); animation-delay: 0.4s; }
+
+    @keyframes splash-bounce {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40% { transform: scale(1.2); opacity: 1; }
+    }
+
+    /* ============================================================
+       ЭКРАН РЕГИСТРАЦИИ
+       Форма для ввода ника и названия клуба
+       ============================================================ */
+    #screen-registration {
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: var(--bg-primary);
+      z-index: 9998;
+    }
+
+    .registration-container {
+      width: 100%;
+      max-width: 380px;
+    }
+
+    .registration-title {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .registration-title h1 {
+      font-size: 36px;
+      font-weight: 900;
+      background: var(--grad-main);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .registration-title p {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-top: 8px;
+    }
+
+    /* Форма регистрации */
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+    .form-input {
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+      padding: 14px 16px;
+      color: var(--text-primary);
+      font-size: 16px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .form-input:focus {
+      border-color: var(--accent-orange);
+      box-shadow: 0 0 0 3px rgba(255,107,53,0.15);
+    }
+    .form-input::placeholder { color: var(--text-muted); }
+
+    /* Кнопки */
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 16px;
+      border: none;
+      border-radius: var(--border-radius);
+      font-size: 16px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      text-decoration: none;
+    }
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary {
+      background: var(--grad-main);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(255,107,53,0.4);
+    }
+    .btn-primary:active { box-shadow: 0 2px 10px rgba(255,107,53,0.3); }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.08);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-purple {
+      background: var(--grad-purple);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(123,47,255,0.4);
+    }
+
+    .btn-sm {
+      padding: 10px 16px;
+      font-size: 14px;
+      width: auto;
+    }
+
+    /* ============================================================
+       ЭКРАН ГЛАВНОГО МЕНЮ (HUB)
+       Плиточный интерфейс для доступа к разделам
+       ============================================================ */
+    #screen-main-menu {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Сетка плиток главного меню */
+    .hub-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding: 16px;
+    }
+
+    /* Одна плитка меню */
+    .hub-tile {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius-lg);
+      padding: 20px 16px;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, border-color 0.2s;
+      position: relative;
+      overflow: hidden;
+      min-height: 110px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .hub-tile:active { transform: scale(0.96); }
+
+    /* Декоративный градиентный угол плитки */
+    .hub-tile::before {
+      content: '';
+      position: absolute;
+      top: -20px; right: -20px;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      opacity: 0.15;
+    }
+
+    /* Цвета для разных плиток */
+    .hub-tile[data-screen="squad"]::before          { background: var(--accent-orange); }
+    .hub-tile[data-screen="division"]::before       { background: var(--accent-blue); }
+    .hub-tile[data-screen="friends"]::before        { background: var(--accent-pink); }
+    .hub-tile[data-screen="players"]::before        { background: var(--accent-purple); }
+    .hub-tile[data-screen="store"]::before          { background: var(--accent-gold); }
+    .hub-tile[data-screen="events"]::before         { background: var(--accent-pink); }
+    .hub-tile[data-screen="quests"]::before         { background: var(--accent-orange); }
+    .hub-tile[data-screen="exchanges"]::before      { background: var(--accent-blue); }
+
+    .hub-tile-icon { font-size: 32px; }
+    .hub-tile-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .hub-tile-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Широкая плитка занимает обе колонки */
+    .hub-tile.wide { grid-column: 1 / -1; }
+
+    /* Бейджи на плитках (уведомления) */
+    .hub-badge {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: var(--accent-pink);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 10px;
+      min-width: 18px;
+      text-align: center;
+    }
+
+    /* ============================================================
+       КАРТОЧКИ ИГРОКОВ
+       Основной визуальный компонент игры
+       ============================================================ */
+    .player-card {
+      position: relative;
+      width: 100px;
+      height: 140px;
+      border-radius: 12px;
+      background: var(--grad-blue);
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    /* Большая версия карточки */
+    .player-card.large {
+      width: 130px;
+      height: 182px;
+    }
+
+    /* Маленькая версия */
+    .player-card.small {
+      width: 72px;
+      height: 100px;
+    }
+
+    .player-card:active { transform: scale(0.95); }
+
+    /* Подсвеченное состояние карточки (выбрана) */
+    .player-card.highlighted {
+      box-shadow: 0 0 0 3px var(--accent-gold), 0 0 20px rgba(255,215,0,0.4);
+      transform: translateY(-4px);
+    }
+
+    /* Фон карточки (затемнение поверх градиента) */
+    .player-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to bottom, transparent 40%, rgba(0,0,0,0.7) 100%);
+    }
+
+    /* Блоки информации на карточке */
+    .card-ovr {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      font-size: 20px;
+      font-weight: 900;
+      color: #fff;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+      line-height: 1;
+    }
+    .player-card.small .card-ovr { font-size: 14px; top: 5px; left: 5px; }
+    .player-card.large .card-ovr { font-size: 26px; top: 10px; left: 10px; }
+
+    .card-pos {
+      position: absolute;
+      top: 30px;
+      left: 8px;
+      font-size: 10px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.8);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .player-card.small .card-pos { font-size: 8px; top: 22px; left: 5px; }
+    .player-card.large .card-pos { font-size: 12px; top: 38px; left: 10px; }
+
+    .card-flag {
+      position: absolute;
+      top: 44px;
+      left: 8px;
+      font-size: 16px;
+    }
+    .player-card.small .card-flag { font-size: 11px; top: 33px; left: 5px; }
+    .player-card.large .card-flag { font-size: 20px; top: 55px; left: 10px; }
+
+    .card-name {
+      position: absolute;
+      bottom: 8px;
+      left: 0; right: 0;
+      text-align: center;
+      font-size: 10px;
+      font-weight: 700;
+      color: #fff;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+      padding: 0 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      z-index: 1;
+    }
+    .player-card.small .card-name { font-size: 8px; bottom: 5px; }
+    .player-card.large .card-name { font-size: 12px; bottom: 10px; }
+
+    /* Градиенты для разных программ/событий карточек */
+    .card-grad-standard  { background: linear-gradient(135deg, #1a6dbd, #00b4d8); }
+    .card-grad-rare      { background: linear-gradient(135deg, #6a0dad, #c71585); }
+    .card-grad-epic      { background: linear-gradient(135deg, #ff6b35, #7b2fff); }
+    .card-grad-legend    { background: linear-gradient(135deg, #ffd700, #ff6b35); }
+    .card-grad-promo     { background: linear-gradient(135deg, #00c853, #00b4d8); }
+    .card-grad-event     { background: linear-gradient(135deg, #ff3b7a, #7b2fff); }
+    .card-grad-starter   { background: linear-gradient(135deg, #2196f3, #00bcd4); }
+
+    /* ============================================================
+       ЭКРАН "МОИ ИГРОКИ" (ИНВЕНТАРЬ)
+       Список всех карточек игрока
+       ============================================================ */
+    #screen-players .players-filters {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      flex-shrink: 0;
+    }
+    #screen-players .players-filters::-webkit-scrollbar { display: none; }
+
+    .filter-chip {
+      flex-shrink: 0;
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .filter-chip.active {
+      background: var(--grad-main);
+      border-color: transparent;
+      color: #fff;
+    }
+
+    .players-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      padding: 0 16px 16px;
+    }
+
+    .players-grid-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .players-grid-item .card-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    /* ============================================================
+       ЭКРАН "СОСТАВ" (SQUAD BUILDER)
+       Поле с расстановкой игроков
+       ============================================================ */
+    #screen-squad {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .squad-field-wrapper {
+      position: relative;
+      width: 100%;
+      padding-top: 140%;
+      background: radial-gradient(ellipse at center, #1a5c2a 0%, #0d3318 60%, #081a0c 100%);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .squad-field-inner {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* Разметка поля */
+    .field-lines {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .field-lines svg {
+      width: 100%;
+      height: 100%;
+      opacity: 0.25;
+    }
+
+    /* Слоты игроков на поле */
+    .formation-slots {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+      padding: 12px 8px;
+    }
+
+    .formation-row {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+    }
+
+    /* Слот позиции на поле */
+    .position-slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+    }
+
+    .slot-card-area {
+      width: 58px;
+      height: 80px;
+      border-radius: 8px;
+      border: 2px dashed rgba(255,255,255,0.3);
+      background: rgba(0,0,0,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.2s, background 0.2s;
+      overflow: hidden;
+    }
+    .slot-card-area.filled {
+      border: none;
+      background: transparent;
+    }
+    .slot-card-area .slot-icon {
+      font-size: 20px;
+      color: rgba(255,255,255,0.3);
+    }
+
+    .slot-pos-label {
+      font-size: 9px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.7);
+      text-transform: uppercase;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    }
+
+    /* Скамейка запасных */
+    .squad-bench {
+      padding: 12px 16px;
+      flex-shrink: 0;
+    }
+    .bench-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+    }
+    .bench-row {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding-bottom: 4px;
+    }
+    .bench-row::-webkit-scrollbar { display: none; }
+
+    /* ============================================================
+       ЭКРАН "МАГАЗИН"
+       Паки и покупки
+       ============================================================ */
+    #screen-store .store-section-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text-primary);
+      padding: 16px 16px 8px;
+    }
+
+    .packs-row {
+      display: flex;
+      gap: 12px;
+      padding: 0 16px 16px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .packs-row::-webkit-scrollbar { display: none; }
+
+    /* Карточка пака */
+    .pack-card {
+      flex-shrink: 0;
+      width: 150px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius-lg);
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .pack-card:active { transform: scale(0.96); }
+
+    .pack-card-visual {
+      height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      position: relative;
+      overflow: hidden;
+    }
+    .pack-card-visual::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      opacity: 0.6;
+    }
+    .pack-visual-standard::before { background: var(--grad-blue); }
+    .pack-visual-rare::before     { background: linear-gradient(135deg, #6a0dad, #c71585); }
+    .pack-visual-epic::before     { background: linear-gradient(135deg, #ff6b35, #7b2fff); }
+    .pack-visual-legend::before   { background: var(--grad-gold); }
+
+    .pack-card-info {
+      padding: 10px 12px;
+    }
+    .pack-card-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .pack-card-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    .pack-card-price {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .pack-card-price img {
+      width: 18px;
+      height: 18px;
+      object-fit: contain;
+    }
+
+    /* ============================================================
+       ЭКРАН "СОБЫТИЯ"
+       Активные ивенты
+       ============================================================ */
+    .events-list {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .event-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius-lg);
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .event-card:active { transform: scale(0.98); }
+
+    .event-card-banner {
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+    .event-card-banner::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      opacity: 0.7;
+    }
+    .event-banner-grad-1::before { background: linear-gradient(135deg, #ff3b7a, #7b2fff); }
+    .event-banner-grad-2::before { background: linear-gradient(135deg, #ffd700, #ff6b35); }
+    .event-banner-grad-3::before { background: linear-gradient(135deg, #00c853, #00b4d8); }
+
+    .event-banner-title {
+      font-size: 18px;
+      font-weight: 900;
+      color: #fff;
+      z-index: 1;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    }
+    .event-banner-icon {
+      font-size: 36px;
+      z-index: 1;
+    }
+
+    .event-card-body {
+      padding: 12px 16px;
+    }
+    .event-card-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 10px;
+      line-height: 1.5;
+    }
+    .event-timer {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--accent-orange);
+      font-weight: 600;
+    }
+
+    /* ============================================================
+       ЭКРАН "КВЕСТЫ"
+       Список заданий
+       ============================================================ */
+    .quests-list {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .quest-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .quest-item.completed { border-color: rgba(0,200,83,0.4); }
+    .quest-item:active { background: var(--bg-card-2); }
+
+    .quest-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--grad-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .quest-item.completed .quest-icon { background: linear-gradient(135deg, #00c853, #00b4d8); }
+
+    .quest-info { flex: 1; min-width: 0; }
+    .quest-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .quest-progress-bar {
+      height: 4px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+    .quest-progress-fill {
+      height: 100%;
+      background: var(--grad-main);
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+    .quest-item.completed .quest-progress-fill { background: linear-gradient(90deg,#00c853,#00b4d8); }
+    .quest-progress-text {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .quest-reward {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .quest-reward-item {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .quest-reward-item img {
+      width: 16px;
+      height: 16px;
+      object-fit: contain;
+    }
+
+    /* ============================================================
+       ЭКРАН "ОБМЕНЫ"
+       Рецепты обменов карточек
+       ============================================================ */
+    .exchanges-list {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .exchange-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius-lg);
+      padding: 16px;
+      cursor: pointer;
+      transition: transform 0.15s, border-color 0.2s;
+    }
+    .exchange-card:active { transform: scale(0.98); }
+
+    .exchange-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .exchange-card-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .exchange-card-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: var(--grad-purple);
+      color: #fff;
+    }
+
+    .exchange-recipe {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .exchange-ingredients {
+      display: flex;
+      gap: 4px;
+      flex: 1;
+      flex-wrap: wrap;
+    }
+    .exchange-arrow {
+      font-size: 20px;
+      color: var(--accent-orange);
+      flex-shrink: 0;
+    }
+    .exchange-result { flex-shrink: 0; }
+
+    .exchange-ingredient {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .exchange-ingredient img {
+      width: 14px;
+      height: 14px;
+      object-fit: contain;
+    }
+
+    /* ============================================================
+       ЭКРАН "ДИВИЗИОН"
+       Информация о дивизионе и соперниках
+       ============================================================ */
+    .division-banner {
+      margin: 16px;
+      border-radius: var(--border-radius-lg);
+      padding: 24px;
+      background: var(--grad-blue);
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .division-banner::before {
+      content: '🏆';
+      position: absolute;
+      top: -10px; right: -10px;
+      font-size: 80px;
+      opacity: 0.15;
+    }
+    .division-name {
+      font-size: 22px;
+      font-weight: 900;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .division-rank {
+      font-size: 14px;
+      color: rgba(255,255,255,0.7);
+    }
+    .division-stars {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 12px;
+    }
+    .div-star {
+      font-size: 20px;
+      filter: grayscale(1) brightness(0.5);
+      transition: filter 0.3s;
+    }
+    .div-star.earned { filter: none; }
+
+    .rivals-list {
+      padding: 0 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .rival-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .rival-item:active { background: var(--bg-card-2); }
+    .rival-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--grad-purple);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .rival-info { flex: 1; }
+    .rival-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .rival-ovr {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .rival-play-btn {
+      background: var(--grad-main);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    /* ============================================================
+       ЭКРАН "ДРУЗЬЯ"
+       Список друзей
+       ============================================================ */
+    .friends-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 32px;
+      text-align: center;
+    }
+    .friends-empty-icon { font-size: 64px; margin-bottom: 16px; }
+    .friends-empty-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    .friends-empty-desc {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .friends-list {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .friend-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .friend-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--grad-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+    .friend-info { flex: 1; }
+    .friend-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .friend-status {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .friend-online { color: #00c853; }
+    .friend-ovr {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent-gold);
+    }
+
+    /* ============================================================
+       ПРОФИЛЬ ИГРОКА
+       Детальная страница профиля
+       ============================================================ */
+    .profile-screen-header {
+      padding: 24px 16px 16px;
+      text-align: center;
+    }
+    .profile-big-avatar {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      background: var(--grad-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      margin: 0 auto 12px;
+      border: 3px solid var(--accent-orange);
+      box-shadow: var(--shadow-glow-orange);
+    }
+    .profile-screen-name {
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--text-primary);
+    }
+    .profile-screen-club {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+    .profile-screen-id {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 8px;
+      font-family: monospace;
+    }
+
+    .profile-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      padding: 0 16px 16px;
+    }
+    .profile-stat-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+      padding: 14px 10px;
+      text-align: center;
+    }
+    .profile-stat-value {
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+    .profile-stat-value img {
+      width: 20px;
+      height: 20px;
+      object-fit: contain;
+    }
+    .profile-stat-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ============================================================
+       МОДАЛЬНЫЕ ОКНА
+       Универсальная система модальных диалогов
+       ============================================================ */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 9000;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .modal-overlay.visible {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .modal-sheet {
+      width: 100%;
+      max-width: 480px;
+      background: var(--bg-secondary);
+      border-radius: 24px 24px 0 0;
+      padding: 0 0 32px;
+      transform: translateY(100%);
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      max-height: 90vh;
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+    .modal-sheet::-webkit-scrollbar { display: none; }
+    .modal-overlay.visible .modal-sheet { transform: translateY(0); }
+
+    .modal-handle {
+      width: 40px;
+      height: 4px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 2px;
+      margin: 12px auto 0;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px 0;
+    }
+    .modal-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.08);
+      border: none;
+      color: var(--text-secondary);
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: inherit;
+    }
+    .modal-close:active { background: rgba(255,255,255,0.15); }
+
+    .modal-body { padding: 16px 20px; }
+
+    /* ============================================================
+       TOAST-УВЕДОМЛЕНИЯ
+       Всплывающие сообщения об успехе/ошибке/информации
+       ============================================================ */
+    .toast-container {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: calc(100% - 32px);
+      max-width: 440px;
+      pointer-events: none;
+    }
+
+    .toast {
+      background: var(--bg-card);
+      border-radius: 12px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      border: 1px solid var(--border-color);
+      transform: translateY(-20px);
+      opacity: 0;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      pointer-events: all;
+    }
+    .toast.visible { transform: translateY(0); opacity: 1; }
+    .toast.hiding { transform: translateY(-20px); opacity: 0; }
+
+    .toast-icon { font-size: 20px; flex-shrink: 0; }
+    .toast-message { font-size: 13px; color: var(--text-primary); flex: 1; line-height: 1.4; }
+
+    .toast.success { border-color: rgba(0,200,83,0.3); }
+    .toast.error   { border-color: rgba(255,59,122,0.3); }
+    .toast.info    { border-color: rgba(0,180,216,0.3); }
+    .toast.warning { border-color: rgba(255,215,0,0.3); }
+
+    /* ============================================================
+       ИНДИКАТОР ЗАГРУЗКИ
+       Полноэкранный спиннер
+       ============================================================ */
+    .loader-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10,10,20,0.85);
+      z-index: 99000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .loader-overlay.visible { opacity: 1; pointer-events: all; }
+
+    .loader-spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid rgba(255,107,53,0.2);
+      border-top-color: var(--accent-orange);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loader-text {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    /* ============================================================
+       ОТКРЫТИЕ ПАКА (PACK OPENING)
+       Анимированный экран вскрытия пака
+       ============================================================ */
+    #screen-pack-opening {
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-primary);
+    }
+
+    .pack-opening-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 32px;
+      padding: 32px 16px;
+      width: 100%;
+    }
+
+    .pack-opening-title {
+      font-size: 24px;
+      font-weight: 900;
+      background: var(--grad-main);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-align: center;
+    }
+
+    .pack-opening-visual {
+      width: 160px;
+      height: 220px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 72px;
+      position: relative;
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .pack-opening-visual:active { transform: scale(0.96); }
+    .pack-opening-visual.shaking {
+      animation: pack-shake 0.5s ease;
+    }
+    @keyframes pack-shake {
+      0%, 100% { transform: rotate(0deg); }
+      15%  { transform: rotate(-8deg) scale(1.05); }
+      30%  { transform: rotate(8deg) scale(1.05); }
+      45%  { transform: rotate(-8deg) scale(1.08); }
+      60%  { transform: rotate(8deg) scale(1.08); }
+      75%  { transform: rotate(-4deg) scale(1.05); }
+      90%  { transform: rotate(4deg) scale(1.02); }
+    }
+
+    /* Результаты открытия пака — сетка карточек */
+    .pack-results {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      width: 100%;
+      padding: 0 8px;
+    }
+
+    .pack-result-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      opacity: 0;
+      transform: scale(0.5) translateY(20px);
+      transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .pack-result-item.revealed {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+
+    .pack-hint {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-align: center;
+    }
+
+    /* ============================================================
+       ШАПКА ВНУТРЕННЕГО ЭКРАНА (SUB-SCREEN HEADER)
+       Для экранов второго уровня (не главное меню)
+       ============================================================ */
+    .sub-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      flex-shrink: 0;
+      z-index: 100;
+    }
+
+    .sub-header-back {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.08);
+      border: none;
+      color: var(--text-primary);
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+    .sub-header-back:active { background: rgba(255,255,255,0.15); }
+
+    .sub-header-title {
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--text-primary);
+      flex: 1;
+    }
+
+    .sub-header-action {
+      background: var(--grad-main);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    /* ============================================================
+       ДИАЛОГ ВЫБОРА ИГРОКА (SQUAD SLOT PICKER)
+       Модалка для выбора игрока в слот расстановки
+       ============================================================ */
+    .slot-picker-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      padding: 4px 0;
+    }
+
+    .slot-picker-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      padding: 8px 4px;
+      border-radius: 10px;
+      border: 2px solid transparent;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .slot-picker-item:active { background: rgba(255,255,255,0.06); }
+    .slot-picker-item.selected { border-color: var(--accent-gold); }
+
+    .slot-picker-name {
+      font-size: 10px;
+      color: var(--text-secondary);
+      text-align: center;
+      line-height: 1.3;
+    }
+
+    /* ============================================================
+       СЕКЦИЯ "ВАЛЮТЫ" (CURRENCY STORE)
+       В магазине — раздел пополнения валют
+       ============================================================ */
+    .currency-offers-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 0 16px 16px;
+    }
+
+    .currency-offer-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--border-radius);
+      padding: 16px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: transform 0.15s, border-color 0.2s;
+    }
+    .currency-offer-card:active { transform: scale(0.96); }
+    .currency-offer-card.featured { border-color: var(--accent-orange); }
+
+    .currency-offer-icon {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+      margin: 0 auto 8px;
+      display: block;
+    }
+    .currency-offer-amount {
+      font-size: 20px;
+      font-weight: 900;
+      color: var(--text-primary);
+    }
+    .currency-offer-bonus {
+      font-size: 11px;
+      color: var(--accent-orange);
+      font-weight: 600;
+      margin: 2px 0 8px;
+    }
+    .currency-offer-price {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    /* ============================================================
+       УВЕДОМЛЕНИЕ О ПРИВЕТСТВЕННОМ ПОДАРКЕ
+       Показывается один раз после регистрации
+       ============================================================ */
+    .welcome-gift-modal .modal-body {
+      text-align: center;
+    }
+    .welcome-gift-icon {
+      font-size: 64px;
+      margin-bottom: 12px;
+    }
+    .welcome-gift-title {
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    .welcome-gift-desc {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+    .welcome-gift-rewards {
+      background: var(--bg-card);
+      border-radius: var(--border-radius);
+      padding: 14px;
+      margin-bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .welcome-reward-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .welcome-reward-row img {
+      width: 24px;
+      height: 24px;
+      object-fit: contain;
+    }
+    .welcome-reward-text {
+      font-size: 14px;
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+    .welcome-reward-value {
+      margin-left: auto;
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--accent-gold);
+    }
+
+    /* ============================================================
+       ПУСТЫЕ СОСТОЯНИЯ (EMPTY STATES)
+       Когда нет данных для отображения
+       ============================================================ */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 24px;
+      text-align: center;
+    }
+    .empty-state-icon { font-size: 56px; margin-bottom: 16px; opacity: 0.7; }
+    .empty-state-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    .empty-state-desc {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+
+    /* ============================================================
+       РАЗНЫЕ УТИЛИТЫ
+       Вспомогательные классы
+       ============================================================ */
+    .text-center { text-align: center; }
+    .text-muted   { color: var(--text-muted); }
+    .text-accent  { color: var(--accent-orange); }
+    .text-gold    { color: var(--accent-gold); }
+    .mt-8  { margin-top: 8px; }
+    .mt-16 { margin-top: 16px; }
+    .mb-16 { margin-bottom: 16px; }
+    .px-16 { padding-left: 16px; padding-right: 16px; }
+    .py-8  { padding-top: 8px; padding-bottom: 8px; }
+
+    .divider {
+      height: 1px;
+      background: var(--border-color);
+      margin: 8px 0;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 16px 8px;
+    }
+    .section-header-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text-primary);
+    }
+    .section-header-link {
+      font-size: 13px;
+      color: var(--accent-orange);
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    /* Анимация появления */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-in {
+      animation: fadeInUp 0.3s ease forwards;
+    }
+
+    /* Пульсирующее свечение для важных элементов */
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 10px rgba(255,107,53,0.3); }
+      50%       { box-shadow: 0 0 25px rgba(255,107,53,0.6); }
+    }
+    .pulse { animation: pulse-glow 2s ease-in-out infinite; }
+
+    /* Скроллируемый горизонтальный ряд */
+    .h-scroll-row {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding: 0 16px 8px;
+      scrollbar-width: none;
+    }
+    .h-scroll-row::-webkit-scrollbar { display: none; }
+
+    /* Тег "НОВОЕ" */
+    .tag-new {
+      background: var(--accent-pink);
+      color: #fff;
+      font-size: 9px;
+      font-weight: 800;
+      padding: 2px 5px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      vertical-align: middle;
+      margin-left: 4px;
+    }
+
+    /* Адаптация для десктопных браузеров */
+    @media (min-width: 480px) {
+      #app {
+        border-left: 1px solid var(--border-color);
+        border-right: 1px solid var(--border-color);
+      }
+      .toast-container { max-width: 460px; }
+      .modal-overlay { align-items: center; }
+      .modal-sheet { border-radius: 24px; margin-bottom: 0; max-height: 85vh; }
+    }
+
+    /* Принудительно скрываем неактивные скрины на малых устройствах */
+    @media (max-width: 320px) {
+      .hub-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+      .players-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+       КОРНЕВОЙ КОНТЕЙНЕР ПРИЛОЖЕНИЯ
+       Все экраны рендерятся внутри #app
+       ============================================================ -->
+  <div id="app">
+
+    <!-- ══════════════════════════════════════════════
+         ЭКРАН: SPLASH (загрузка)
+         ══════════════════════════════════════════════ -->
+    <div id="screen-splash" class="screen active">
+      <div class="splash-logo">
+        <div class="splash-logo-text">OFFSIDE FC</div>
+        <div class="splash-logo-sub">Football Manager</div>
+        <div class="splash-loader">
+          <div class="splash-dot"></div>
+          <div class="splash-dot"></div>
+          <div class="splash-dot"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         ЭКРАН: РЕГИСТРАЦИЯ
+         ══════════════════════════════════════════════ -->
+    <div id="screen-registration" class="screen">
+      <div class="registration-container" style="padding:24px; width:100%; overflow-y:auto; height:100%; display:flex; flex-direction:column; justify-content:center;">
+        <div class="registration-title">
+          <h1>OFFSIDE FC</h1>
+          <p>Создай свою легенду на поле</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="reg-nickname">Никнейм</label>
+          <input
+            type="text"
+            id="reg-nickname"
+            class="form-input"
+            placeholder="Введи свой никнейм"
+            maxlength="20"
+            autocomplete="off"
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="reg-club">Название клуба</label>
+          <input
+            type="text"
+            id="reg-club"
+            class="form-input"
+            placeholder="Название твоего клуба"
+            maxlength="25"
+            autocomplete="off"
+          />
+        </div>
+        <button class="btn btn-primary" id="reg-submit-btn" style="margin-top:8px;">
+          ⚽ Начать игру
+        </button>
+        <p style="text-align:center; font-size:11px; color:var(--text-muted); margin-top:16px; line-height:1.6;">
+          Нажимая «Начать игру», ты получишь<br>
+          стартовый подарок из 18 игроков и валют!
+        </p>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         ЭКРАН: ГЛАВНОЕ МЕНЮ (HUB)
+         ══════════════════════════════════════════════ -->
+    <div id="screen-main-menu" class="screen">
+      <!-- Шапка с профилем и валютами -->
+      <div class="game-header">
+        <div class="header-top">
+          <div class="profile-avatar" id="header-avatar" title="Профиль">⚽</div>
+          <div class="profile-info">
+            <div class="profile-name" id="header-nickname">Игрок</div>
+            <div class="profile-level">
+              <span id="header-level-text">Уровень 1</span>
+              &nbsp;·&nbsp;
+              <span class="profile-ovr" id="header-ovr">OVR 65</span>
+            </div>
+            <div class="xp-bar-container">
+              <div class="xp-bar-fill" id="header-xp-bar" style="width:0%"></div>
+            </div>
+          </div>
+          <div class="header-currencies">
+            <div class="currency-pill" id="pill-sapphires" title="Сапфиры">
+              <img src="https://i.ibb.co/5gkW9zFJ/image.png" alt="Сапфиры" />
+              <span id="currency-sapphires">0</span>
+            </div>
+            <div class="currency-pill" id="pill-tokens" title="Offside Tokens">
+              <img src="https://i.ibb.co/Cpq33M9q/Offside.png" alt="Tokens" />
+              <span id="currency-tokens">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Прокручиваемый контент главного меню -->
+      <div class="screen-content">
+        <div class="hub-grid" id="hub-grid">
+          <!-- Плитки генерируются через JS -->
+        </div>
+      </div>
+
+      <!-- Нижняя навигация -->
+      <nav class="bottom-nav" id="bottom-nav">
+        <div class="nav-item active" data-nav="main-menu">
+          <span class="nav-icon">🏠</span>
+          <span class="nav-label">Главная</span>
+        </div>
+        <div class="nav-item" data-nav="squad">
+          <span class="nav-icon">📋</span>
+          <span class="nav-label">Состав</span>
+        </div>
+        <div class="nav-item" data-nav="store">
+          <span class="nav-icon">🛒</span>
+          <span class="nav-label">Магазин</span>
+        </div>
+        <div class="nav-item" data-nav="quests">
+          <span class="nav-icon">📜</span>
+          <span class="nav-label">Квесты</span>
+        </div>
+        <div class="nav-item" data-nav="profile">
+          <span class="nav-icon">👤</span>
+          <span class="nav-label">Профиль</span>
+        </div>
+      </nav>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         ЭКРАН: МОИ ИГРОКИ
+         ══════════════════════════════════════════════ -->
+    <div id="screen-players" class="screen">
+      <div class="sub-header">
+        <button class="sub-header-back" data-back>‹</button>
+        <div class="sub-header-title">Мои игроки</div>
+        <button class="sub-header-action" id="players-sort-btn">⇅ Сортировка</button>
+      </div>
+      <div class="players-filters" id="players-filters">
+        <!-- Фильтры генерируются через JS -->
+      </div>
+      <div class="screen-content" style="padding-bottom:16px;">
+        <div class="players-grid" id="players-grid">
+          <!-- Карточки игроков генерируются через JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         ЭКРАН: СОСТАВ
+         ══════════════════════════════════════════════ -->
+    <div id="screen-squad" class="screen">
+      <div class="sub-header">
+        <button class="sub-header-back" data-back>‹</button>
+        <div class="sub-header-title">Состав</div>
+        <button class="sub-header-action" id="squad-save-btn">💾 Сохранить</button>
+      </div>
+      <div class="screen-content" style="padding-bottom:16px;">
+        <!-- Поле с расстановкой -->
+        <div class="squad-field-wrapper">
+          <div class="squad-field-inner">
+            <!-- SVG-разметка поля -->
+            <div class="field-lines">
+              <svg viewBox="0 0 300 420" xmlns="http://www.w3.org/2000/svg">
+                <!-- Внешняя рамка -->
+                <rect x="5" y="5" width="290" height="410" fill="none" stroke="white" stroke-width="2"/>
+                <!-- Центральная линия -->
+                <line x1="5" y1="210" x2="295" y2="210" stroke="white" stroke-width="1.5"/>
+                <!-- Центральный круг -->
+                <circle cx="150" cy="210" r="40" fill="none" stroke="white" stroke-width="1.5"/>
+                <!-- Центральная точка -->
+                <circle cx="150" cy="210" r="3" fill="white"/>
+                <!-- Верхняя штрафная площадь -->
+                <rect x="70" y="5" width="160" height="60" fill="none" stroke="white" stroke-width="1.5"/>
+                <!-- Верхние ворота -->
+                <rect x="110" y="5" width="80" height="20" fill="none" stroke="white" stroke-width="1.5"/>
+                <!-- Нижняя штрафная площадь -->
+                <rect x="70" y="355" width="160" height="60" fill="none" stroke="white" stroke-width="1.5"/>
+                <!-- Нижние ворота -->
+                <rect x="110" y="395" width="80" height="20" fill="none" stroke="white" stroke-width="1.5"/>
+                <!-- Угловые дуги -->
+                <path d="M5,25 Q25,5 45,5"   fill="none" stroke="white" stroke-width="1.5"/>
+                <path d="M255,5 Q275,5 295,25"  fill="none" stroke="white" stroke-width="1.5"/>
+                <path d="M5,395 Q5,415 25,415"  fill="none" stroke="white" stroke-width="1.5"/>
+                <path d="M295,395 Q295,415 275,415" fill="none" stroke="white" stroke-width="1.5"/>
+              </svg>
+            </div>
+            <!-- Слоты расстановки 4-3-3 (генерируются JS) -->
+            <div class="formation-slots" id="formation-slots"></div>
+          </div>
+        </div>
+        <!-- Запасные игроки -->
+        <div class="squad-bench">
+          <div class="bench-title">Запасные</div>
+          <div class="bench-row" id="bench-row">
+            <!-- Генерируется через JS -->
+          </div>
+        </div>
+        <!-- Общий рейтинг состава -->
+        <div style="padding:0 16px 16px;">
+          <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--border-radius);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:14px;color:var(--text-secondary);">Рейтинг состава</span>
+            <span style="font-size:22px;font-weight:900;color:var(--accent-gold);" id="squad-ovr-display">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         ЭКРАН: МАГАЗИН
+         ══════════════════════════════════════════════ -->
+    <div id="screen-store" class="screen">
+      <div class="sub-header">
+        <button class="sub-header-back" data-back>‹</button>
+        <div class="sub-header-title">Магазин</div>
+      </div>
+      <div class="screen-content">
+        <div class="section-header">
+          <div class="section-header-title">🎁 Паки</div>
+        </div>
+        <div class="packs-row" id="packs-row">
+          <!-- Генерируется через JS -->
+        </div>
+        <div class="divider mx-16"></div>
+        <div class="section-header">
+          <div class="section-header-title">💎 Купоны на открытие</div>
+        </div>
+        <div style="padding:0 16px 8px;">
+          <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--border-radius);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">
+            <div>
+              <div style="font-size:14px;font-weight:700;">Открытие купоном</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Используй накопленные купоны</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <img src="https://i.ibb.co/6RTT8K1z/image.png" alt="Купоны" style="width:22px;height:22px;object-fit:contain;"/>
+              <span id="store-coupons-count" style="font-size:14px;font-weight:700;">0</span>
+            </div>
+          </div>
+        </div>
+        <div class="divider" style="margin:8px 16px;"></div>
+        <div class="section-header">
+          <div class="section-header-title">💰 Пополнить валюту</div>
+        </div>
+        <div class="currency-offers-grid" id="currency-offers-grid">
+          <!-- Генерируется через JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         ЭКРАН: ОТКРЫТИЕ ПАКА
+         ══════════════════════════════════════════════ -->
+    <div id="screen-pack-opening" class="screen">
+      <div class="sub-header">
+        <button class="sub-header-back" data-back>‹</button>
+        <div class="sub-header-title" id="pack-opening-screen-title">Открытие пака</div>
+      </div>
+      <div class="screen-content" style="display:flex;align-items:center;justify-content:center;padding-bottom:16px;">
+        <div class="pack-opening-wrapper" id="pack-opening-wrapper">
+          <!-- Динамически заполняется JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         ЭКРАН: СОБЫТИЯ
+         ══════════════════════════════════════════════ -->
+    <div id="screen-events" class="screen">
+      <div class="sub-header">
+        <button class="sub-header-back" data-back>‹</button>
+        <div class="sub-header-title">События</div>
+      </div>
+      <div class="screen-content">
+        <div class="events-list" id="events-list">
+          <!-- Генерируется через JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         ЭКРАН: КВЕСТЫ
+         ══════════════════════════════════════════════ -->
+    <div id="screen-quests" class="screen">
+      <div class="sub-header">
+        <button class="sub-header-back" data-back>‹</button>
+        <div class="sub-header-title">Квесты</div>
+      </div>
+      <div class="screen-content">
+        <div class="quests-list" id="quests-list">
+          <!-- Генерируется через JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         ЭКРАН: ОБМЕНЫ
+         ══════════════════════════════════════════════ -->
+    <div id="screen-exchanges" class="screen">
+      <div class="sub-header">
+        <button class="sub-header-back" data-back>‹</button>
+        <div class="sub-header-title">Обмены</div>
+      </div>
+      <div class="screen-content">
+        <div style="padding:12px 16px 4px;">
+          <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;">
+            Обменивай ресурсы и карточки для получения редких игроков и предметов.
+          </p>
+        </div>
+        <div class="exchanges-list" id="exchanges-list">
+          <!-- Генерируется через JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         ЭКРАН: ДИВИЗИОН
+         ══════════════════════════════════════════════ -->
+    <div id="screen-division" class="screen">
+      <div class="sub-header">
+        <button class="sub-header-back" data-back>‹</button>
+        <div class="sub-header-title">Дивизион</div>
+      </div>
+      <div class="screen-content">
+        <div class="division-banner" id="division-banner">
+          <div class="division-name" id="division-name">Дивизион X</div>
+          <div class="division-rank" id="division-rank">Ранг: Новичок</div>
+          <div class="division-stars" id="division-stars"></div>
+        </div>
+        <div class="section-header">
+          <div class="section-header-title">⚔️ Соперники</div>
+        </div>
+        <div class="rivals-list" id="rivals-list">
+          <!-- Генерируется через JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         ЭКРАН: ДРУЗЬЯ
+         ══════════════════════════════════════════════ -->
+    <div id="screen-friends" class="screen">
+      <div class="sub-header">
+        <button class="sub-header-back" data-back>‹</button>
+        <div class="sub-header-title">Друзья</div>
+        <button class="sub-header-action" id="add-friend-btn">+ Добавить</button>
+      </div>
+      <div class="screen-content">
+        <div id="friends-container">
+          <!-- Генерируется через JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         ЭКРАН: ПРОФИЛЬ
+         ══════════════════════════════════════════════ -->
+    <div id="screen-profile" class="screen">
+      <div class="sub-header">
+        <button class="sub-header-back" data-back>‹</button>
+        <div class="sub-header-title">Профиль</div>
+      </div>
+      <div class="screen-content">
+        <div class="profile-screen-header">
+          <div class="profile-big-avatar" id="profile-big-avatar">⚽</div>
+          <div class="profile-screen-name" id="profile-screen-name">—</div>
+          <div class="profile-screen-club" id="profile-screen-club">—</div>
+          <div class="profile-screen-id" id="profile-screen-id">ID: —</div>
+        </div>
+        <div class="profile-stats-grid" id="profile-stats-grid">
+          <!-- Генерируется через JS -->
+        </div>
+        <div style="padding: 0 16px 16px; display:flex; flex-direction:column; gap:10px;">
+          <button class="btn btn-secondary" id="profile-edit-btn">✏️ Редактировать профиль</button>
+          <button class="btn btn-secondary" id="profile-reset-btn" style="border-color:rgba(255,59,122,0.3);color:var(--accent-pink);">🗑️ Сбросить прогресс</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         ОВЕРЛЕЙ МОДАЛЬНОГО ОКНА
+         Универсальный контейнер для всех модалок
+         ══════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="modal-overlay">
+      <div class="modal-sheet" id="modal-sheet">
+        <div class="modal-handle"></div>
+        <div class="modal-header">
+          <div class="modal-title" id="modal-title">Заголовок</div>
+          <button class="modal-close" id="modal-close-btn">✕</button>
+        </div>
+        <div class="modal-body" id="modal-body">
+          <!-- Динамический контент -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════
+         КОНТЕЙНЕР TOAST-УВЕДОМЛЕНИЙ
+         ══════════════════════════════════════════════ -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- ══════════════════════════════════════════════
+         ИНДИКАТОР ЗАГРУЗКИ
+         ══════════════════════════════════════════════ -->
+    <div class="loader-overlay" id="loader-overlay">
+      <div class="loader-spinner"></div>
+      <div class="loader-text" id="loader-text">Загрузка...</div>
+    </div>
+
+  </div><!-- /#app -->
+
+  <!-- ============================================================
+       ВЕСЬ ИГРОВОЙ JAVASCRIPT
+       Единый модульный скрипт, содержащий всю логику игры
+       ============================================================ -->
+  <script type="module">
+    'use strict';
+
+    /* ============================================================
+       GAME_DATA — ГЛОБАЛЬНЫЙ ОБЪЕКТ ДАННЫХ ИГРЫ
+       Содержит все статические конфигурации: карточки, паки,
+       обмены, квесты, события, расстановки. Легко редактировать.
+       ============================================================ */
+    const GAME_DATA = {
+
+      /* --- Иконки валют --- */
+      currencyIcons: {
+        sapphires:    'https://i.ibb.co/5gkW9zFJ/image.png',
+        tokens:       'https://i.ibb.co/Cpq33M9q/Offside.png',
+        ovrPoints:    'https://i.ibb.co/jv3KsbMx/OVR.png',
+        divStars:     'https://i.ibb.co/twVpcSbk/image.png',
+        xp:           'https://i.ibb.co/TxwKYZVc/XP.png',
+        subPoints:    'https://i.ibb.co/zVW0z5nQ/image.png',
+        trainingPts:  'https://i.ibb.co/gb178dPT/image.png',
+        fragments:    'https://i.ibb.co/xtBftkpX/image.png',
+        coupons:      'https://i.ibb.co/6RTT8K1z/image.png',
+      },
+
+      /* --- Расстановка 4-3-3 ---
+           Каждая строка поля: массив позиций
+           row 0 = вратарь (низ поля с т.з. атаки), row 4 = нападающие
+      */
+      formation433: [
+        { row: 0, positions: [{ pos: 'GK', label: 'ВР', icon: '🧤' }] },
+        { row: 1, positions: [
+          { pos: 'LB',  label: 'ЛЗ', icon: '🛡️' },
+          { pos: 'CB1', label: 'ЦЗ', icon: '🛡️' },
+          { pos: 'CB2', label: 'ЦЗ', icon: '🛡️' },
+          { pos: 'RB',  label: 'ПЗ', icon: '🛡️' },
+        ]},
+        { row: 2, positions: [
+          { pos: 'LM',  label: 'ЛП', icon: '⚙️' },
+          { pos: 'CM',  label: 'ЦП', icon: '⚙️' },
+          { pos: 'RM',  label: 'ПП', icon: '⚙️' },
+        ]},
+        { row: 3, positions: [
+          { pos: 'LW',  label: 'ЛВ', icon: '⚡' },
+          { pos: 'ST',  label: 'НП', icon: '⚡' },
+          { pos: 'RW',  label: 'ПВ', icon: '⚡' },
+        ]},
+      ],
+
+      /* --- Стартовые игроки (Welcome Gift) ---
+           18 карточек: 11 основных (4-3-3) + 7 запасных
+      */
+      starterPlayers: [
+        // === ОСНОВНОЙ СОСТАВ ===
+        { id:'sp01', name:'Алиев',     pos:'GK',  ovr:67, nation:'🇷🇺', grad:'card-grad-starter', program:'starter' },
+        { id:'sp02', name:'Петров',    pos:'LB',  ovr:65, nation:'🇷🇺', grad:'card-grad-starter', program:'starter' },
+        { id:'sp03', name:'Иванов',    pos:'CB',  ovr:66, nation:'🇷🇺', grad:'card-grad-starter', program:'starter' },
+        { id:'sp04', name:'Смирнов',   pos:'CB',  ovr:65, nation:'🇺🇦', grad:'card-grad-starter', program:'starter' },
+        { id:'sp05', name:'Козлов',    pos:'RB',  ovr:64, nation:'🇧🇾', grad:'card-grad-starter', program:'starter' },
+        { id:'sp06', name:'Новиков',   pos:'LM',  ovr:66, nation:'🇷🇺', grad:'card-grad-starter', program:'starter' },
+        { id:'sp07', name:'Морозов',   pos:'CM',  ovr:68, nation:'🇷🇺', grad:'card-grad-starter', program:'starter' },
+        { id:'sp08', name:'Волков',    pos:'RM',  ovr:65, nation:'🇰🇿', grad:'card-grad-starter', program:'starter' },
+        { id:'sp09', name:'Лебедев',   pos:'LW',  ovr:67, nation:'🇷🇺', grad:'card-grad-starter', program:'starter' },
+        { id:'sp10', name:'Соколов',   pos:'ST',  ovr:69, nation:'🇷🇺', grad:'card-grad-starter', program:'starter' },
+        { id:'sp11', name:'Попов',     pos:'RW',  ovr:66, nation:'🇺🇿', grad:'card-grad-starter', program:'starter' },
+        // === ЗАПАСНЫЕ ===
+        { id:'sp12', name:'Зайцев',    pos:'GK',  ovr:63, nation:'🇷🇺', grad:'card-grad-starter', program:'starter' },
+        { id:'sp13', name:'Орлов',     pos:'CB',  ovr:63, nation:'🇷🇺', grad:'card-grad-starter', program:'starter' },
+        { id:'sp14', name:'Федоров',   pos:'LB',  ovr:62, nation:'🇦🇲', grad:'card-grad-starter', program:'starter' },
+        { id:'sp15', name:'Михайлов',  pos:'CM',  ovr:64, nation:'🇷🇺', grad:'card-grad-starter', program:'starter' },
+        { id:'sp16', name:'Никитин',   pos:'RM',  ovr:63, nation:'🇬🇪', grad:'card-grad-starter', program:'starter' },
+        { id:'sp17', name:'Захаров',   pos:'LW',  ovr:64, nation:'🇷🇺', grad:'card-grad-starter', program:'starter' },
+        { id:'sp18', name:'Семенов',   pos:'ST',  ovr:65, nation:'🇷🇺', grad:'card-grad-starter', program:'starter' },
+      ],
+
+      /* --- Стартовое расположение игроков в слотах ---
+           Маппинг: ключ слота → id стартового игрока
+      */
+      starterSquad: {
+        GK:  'sp01',
+        LB:  'sp02',
+        CB1: 'sp03',
+        CB2: 'sp04',
+        RB:  'sp05',
+        LM:  'sp06',
+        CM:  'sp07',
+        RM:  'sp08',
+        LW:  'sp09',
+        ST:  'sp10',
+        RW:  'sp11',
+      },
+
+      /* --- Стартовая скамейка --- */
+      starterBench: ['sp12','sp13','sp14','sp15','sp16','sp17','sp18'],
+
+      /* --- Паки в магазине --- */
+      packs: [
+        {
+          id: 'pack_standard',
+          name: 'Стандартный пак',
+          desc: '5 игроков, OVR 60–72',
+          icon: '📦',
+          visual: 'pack-visual-standard',
+          currency: 'sapphires',
+          price: 500,
+          count: 5,
+          minOvr: 60,
+          maxOvr: 72,
+          grades: ['standard'],
+        },
+        {
+          id: 'pack_rare',
+          name: 'Редкий пак',
+          desc: '5 игроков, OVR 72–82',
+          icon: '💜',
+          visual: 'pack-visual-rare',
+          currency: 'sapphires',
+          price: 1200,
+          count: 5,
+          minOvr: 72,
+          maxOvr: 82,
+          grades: ['standard','rare'],
+        },
+        {
+          id: 'pack_epic',
+          name: 'Эпический пак',
+          desc: '5 игроков, OVR 80–88',
+          icon: '🔥',
+          visual: 'pack-visual-epic',
+          currency: 'tokens',
+          price: 50,
+          count: 5,
+          minOvr: 80,
+          maxOvr: 88,
+          grades: ['rare','epic'],
+        },
+        {
+          id: 'pack_legend',
+          name: 'Легендарный пак',
+          desc: '3 игрока, OVR 88–99',
+          icon: '⭐',
+          visual: 'pack-visual-legend',
+          currency: 'tokens',
+          price: 150,
+          count: 3,
+          minOvr: 88,
+          maxOvr: 99,
+          grades: ['epic','legend'],
+        },
+      ],
+
+      /* --- Пул имён для генерации случайных игроков из паков --- */
+      randomPlayerNames: [
+        'Арсен','Виктор','Дмитрий','Ерлан','Жан','Зубер','Ильяс',
+        'Камаль','Леонид','Марат','Нурлан','Олег','Павел','Рустам',
+        'Сергей','Тимур','Умид','Фёдор','Христо','Шота','Эдуард',
+        'Юрий','Якуб','Алибек','Бауыр','Гагик','Данил','Эрик',
+        'Торе','Асхат','Бекзод','Вахид','Гурам','Давит','Заур',
+      ],
+
+      /* --- Фамилии для случайных игроков --- */
+      randomPlayerSurnames: [
+        'Алиев','Бекков','Волков','Громов','Давлетов','Егоров',
+        'Жуков','Зверев','Иванов','Карпов','Ларин','Мамедов',
+        'Назаров','Осипов','Петров','Рахимов','Сидоров','Тихонов',
+        'Усманов','Фролов','Харитонов','Цветков','Чернов','Шевцов',
+      ],
+
+      /* --- Нации для случайных игроков --- */
+      randomNations: [
+        '🇷🇺','🇺🇦','🇧🇾','🇰🇿','🇺🇿','🇬🇪','🇦🇲','🇦🇿',
+        '🇹🇯','🇹🇲','🇲🇩','🇱🇹','🇱🇻','🇪🇪','🇵🇱','🇩🇪',
+        '🇫🇷','🇧🇷','🇦🇷','🇵🇹','🇪🇸','🇮🇹','🇳🇱','🇧🇪',
+      ],
+
+      /* --- Позиции для случайных игроков --- */
+      allPositions: ['GK','CB','LB','RB','CM','LM','RM','DM','CAM','LW','RW','ST','CF'],
+
+      /* --- Градиенты по грейду карточки --- */
+      gradeGradients: {
+        standard: 'card-grad-standard',
+        rare:     'card-grad-rare',
+        epic:     'card-grad-epic',
+        legend:   'card-grad-legend',
+        promo:    'card-grad-promo',
+        event:    'card-grad-event',
+        starter:  'card-grad-starter',
+      },
+
+      /* --- Рецепты обменов --- */
+      exchanges: [
+        {
+          id: 'exch_frags_to_sap',
+          name: 'Фрагменты → Сапфиры',
+          badge: 'Ресурсы',
+          ingredients: [
+            { icon: 'fragments', label: 'Фрагменты', amount: 100 },
+          ],
+          result: { icon: 'sapphires', label: 'Сапфиры', amount: 200 },
+        },
+        {
+          id: 'exch_train_to_ovr',
+          name: 'Трен. очки → OVR очки',
+          badge: 'Прокачка',
+          ingredients: [
+            { icon: 'trainingPts', label: 'Трен. очки', amount: 200 },
+          ],
+          result: { icon: 'ovrPoints', label: 'OVR очки', amount: 50 },
+        },
+        {
+          id: 'exch_sap_to_coupon',
+          name: 'Сапфиры → Купон',
+          badge: 'Обмен',
+          ingredients: [
+            { icon: 'sapphires', label: 'Сапфиры', amount: 300 },
+          ],
+          result: { icon: 'coupons', label: 'Купон', amount: 1 },
+        },
+        {
+          id: 'exch_frags_to_rare',
+          name: 'Фрагменты → Редкий игрок',
+          badge: 'Игроки',
+          ingredients: [
+            { icon: 'fragments', label: 'Фрагменты', amount: 500 },
+            { icon: 'trainingPts', label: 'Трен. очки', amount: 100 },
+          ],
+          result: { icon: null, label: 'Редкий игрок', amount: 1, isPlayer: true, grade: 'rare', minOvr: 72, maxOvr: 82 },
+        },
+      ],
+
+      /* --- Квесты --- */
+      quests: [
+        {
+          id: 'q_open_pack',
+          name: 'Первое открытие',
+          icon: '📦',
+          description: 'Открой свой первый пак',
+          target: 1,
+          type: 'packs_opened',
+          reward: { sapphires: 300, xp: 100 },
+        },
+        {
+          id: 'q_fill_squad',
+          name: 'Собери состав',
+          icon: '📋',
+          description: 'Заполни все 11 слотов основного состава',
+          target: 11,
+          type: 'squad_slots_filled',
+          reward: { sapphires: 500, xp: 200 },
+        },
+        {
+          id: 'q_collect_players',
+          name: 'Коллекционер',
+          icon: '🃏',
+          description: 'Собери 25 игроков в своём клубе',
+          target: 25,
+          type: 'total_players',
+          reward: { tokens: 20, xp: 300 },
+        },
+        {
+          id: 'q_reach_ovr70',
+          name: 'Растущий клуб',
+          icon: '📈',
+          description: 'Достигни рейтинга состава 70+ OVR',
+          target: 70,
+          type: 'squad_ovr',
+          reward: { sapphires: 800, ovrPoints: 100 },
+        },
+        {
+          id: 'q_exchange_once',
+          name: 'Первый обмен',
+          icon: '🔄',
+          description: 'Соверши свой первый обмен',
+          target: 1,
+          type: 'exchanges_done',
+          reward: { fragments: 200, xp: 150 },
+        },
+      ],
+
+      /* --- Активные события --- */
+      events: [
+        {
+          id: 'evt_winter_cup',
+          name: 'Зимний Кубок',
+          desc: 'Открывай паки и получай особых зимних игроков с повышенными характеристиками!',
+          icon: '❄️',
+          banner: 'event-banner-grad-1',
+          endsIn: '5 дней 12 часов',
+          reward: 'Зимний Рейд-игрок OVR 85+',
+        },
+        {
+          id: 'evt_golden_league',
+          name: 'Золотая Лига',
+          desc: 'Побеждай в дивизионных матчах и зарабатывай Золотые Звёзды для особого магазина.',
+          icon: '🏆',
+          banner: 'event-banner-grad-2',
+          endsIn: '2 дня 8 часов',
+          reward: '5000 Сапфиров',
+        },
+        {
+          id: 'evt_fragment_rush',
+          name: 'Фрагментный Налёт',
+          desc: 'x2 фрагменты за все обмены в течение недели. Успей воспользоваться!',
+          icon: '💎',
+          banner: 'event-banner-grad-3',
+          endsIn: '7 дней',
+          reward: 'x2 Фрагменты',
+        },
+      ],
+
+      /* --- Соперники дивизиона (статичные для демо) --- */
+      rivals: [
+        { name: 'FC Северный Ветер', ovr: 68, avatar: '🐺', wins: 12, losses: 5 },
+        { name: 'Стальные Орлы',     ovr: 70, avatar: '🦅', wins: 15, losses: 3 },
+        { name: 'Красные Волки',     ovr: 66, avatar: '🐺', wins: 9,  losses: 8 },
+        { name: 'Городские Ястребы', ovr: 71, avatar: '🦉', wins: 17, losses: 2 },
+        { name: 'Динамо Восток',     ovr: 65, avatar: '⚡', wins: 7,  losses: 10 },
+      ],
+
+      /* --- Предложения валют в магазине --- */
+      currencyOffers: [
+        { icon: 'sapphires', amount: 1000,  bonus: '',        price: 'Бесплатно (реклама)' },
+        { icon: 'sapphires', amount: 5000,  bonus: '+500',    price: '79₽', featured: false },
+        { icon: 'tokens',    amount: 100,   bonus: '',        price: '99₽', featured: true  },
+        { icon: 'tokens',    amount: 500,   bonus: '+100',    price: '399₽', featured: false },
+      ],
+
+      /* --- Плитки главного меню --- */
+      hubTiles: [
+        { screen: 'squad',     icon: '📋', name: 'Состав',       desc: 'Управляй командой',  wide: false },
+        { screen: 'division',  icon: '🏆', name: 'Дивизион',     desc: 'Играй и побеждай',   wide: false },
+        { screen: 'friends',   icon: '👥', name: 'Друзья',       desc: 'Зови друзей',         wide: false },
+        { screen: 'players',   icon: '🃏', name: 'Игроки',       desc: 'Мой инвентарь',       wide: false },
+        { screen: 'store',     icon: '🛒', name: 'Магазин',      desc: 'Паки и валюта',       wide: false },
+        { screen: 'events',    icon: '🎉', name: 'События',      desc: 'Ивенты и бонусы',     wide: false },
+        { screen: 'quests',    icon: '📜', name: 'Квесты',       desc: 'Выполняй задания',    wide: false },
+        { screen: 'exchanges', icon: '🔄', name: 'Обмены',       desc: 'Трать ресурсы',       wide: false },
+      ],
+    };
+
+    /* ============================================================
+       EVENT EMITTER — ШИН СОБЫТИЙ (PUB/SUB)
+       Позволяет компонентам общаться, не зная друг о друге.
+       Использование:
+         Events.on('player:obtained', handler)
+         Events.emit('player:obtained', data)
+         Events.off('player:obtained', handler)
+       ============================================================ */
+    class EventEmitter {
+      constructor() {
+        // Хранилище: { 'eventName': [handler1, handler2, ...] }
+        this._listeners = {};
+      }
+
+      /**
+       * Подписаться на событие
+       * @param {string} event - Название события
+       * @param {Function} handler - Функция-обработчик
+       */
+      on(event, handler) {
+        if (!this._listeners[event]) {
+          this._listeners[event] = [];
+        }
+        this._listeners[event].push(handler);
+        return this; // Позволяет цепочку вызовов
+      }
+
+      /**
+       * Отписаться от события
+       * @param {string} event - Название события
+       * @param {Function} handler - Та же функция, что передавалась в on()
+       */
+      off(event, handler) {
+        if (!this._listeners[event]) return this;
+        this._listeners[event] = this._listeners[event].filter(h => h !== handler);
+        return this;
+      }
+
+      /**
+       * Генерировать событие — вызвать все подписанные обработчики
+       * @param {string} event - Название события
+       * @param {...any} args - Аргументы для обработчиков
+       */
+      emit(event, ...args) {
+        if (!this._listeners[event]) return this;
+        // Копируем массив, чтобы избежать проблем если обработчик меняет listeners
+        [...this._listeners[event]].forEach(handler => {
+          try {
+            handler(...args);
+          } catch (err) {
+            console.error(`[EventEmitter] Ошибка в обработчике события "${event}":`, err);
+          }
+        });
+        return this;
+      }
+
+      /**
+       * Подписаться ОДИН РАЗ — автоматически отписывается после первого вызова
+       */
+      once(event, handler) {
+        const wrapper = (...args) => {
+          handler(...args);
+          this.off(event, wrapper);
+        };
+        return this.on(event, wrapper);
+      }
+    }
+
+    // Глобальный экземпляр шины событий
+    const Events = new EventEmitter();
+
+    /* ============================================================
+       GAME STATE — СЕРВИС УПРАВЛЕНИЯ СОСТОЯНИЕМ ИГРЫ
+       Единственный класс, который читает/пишет в localStorage.
+       Все остальные части игры работают через этот сервис.
+       ============================================================ */
+    class GameState {
+      constructor() {
+        // Ключ в localStorage для хранения сохранения
+        this.SAVE_KEY = 'offside_fc_save_v1';
+
+        // Дефолтное состояние (используется при первом запуске)
+        this.state = this._getDefaultState();
+      }
+
+      /**
+       * Возвращает дефолтное (пустое) состояние новой игры
+       * @returns {Object} Начальное состояние
+       */
+      _getDefaultState() {
+        return {
+          // Флаг завершённой регистрации
+          registered: false,
+
+          // Профиль игрока
+          profile: {
+            id: '',
+            nickname: '',
+            clubName: '',
+            level: 1,
+            xp: 0,
+            xpToNextLevel: 500,
+            avatar: '⚽',
+          },
+
+          // Валюты игрока
+          currencies: {
+            sapphires:   0,
+            tokens:      0,
+            ovrPoints:   0,
+            divStars:    0,
+            xp:          0,
+            subPoints:   0,
+            trainingPts: 0,
+            fragments:   0,
+            coupons:     0,
+          },
+
+          // Инвентарь карточек игроков
+          // Структура: { [uniqueCardId]: PlayerCard }
+          players: {},
+
+          // Текущий состав
+          // Структура: { slots: { GK: cardId, ... }, bench: [cardId, ...] }
+          squad: {
+            slots: {},
+            bench: [],
+          },
+
+          // Прогресс квестов: { [questId]: { current, completed, rewarded } }
+          questProgress: {},
+
+          // Дивизион
+          division: {
+            name: 'Дивизион X',
+            rank: 'Новичок',
+            stars: 0,
+            maxStars: 5,
+          },
+
+          // Статистика для квестов и аналитики
+          stats: {
+            packsOpened:   0,
+            exchangesDone: 0,
+            matchesPlayed: 0,
+            matchesWon:    0,
+          },
+
+          // Флаг: показан ли приветственный подарок
+          welcomeGiftShown: false,
+
+          // Время создания аккаунта
+          createdAt: null,
+        };
+      }
+
+      /**
+       * Загрузить состояние из localStorage
+       * @returns {boolean} true если загрузка успешна, false если сохранения нет
+       */
+      load() {
+        try {
+          const raw = localStorage.getItem(this.SAVE_KEY);
+          if (!raw) return false;
+          const parsed = JSON.parse(raw);
+          // Объединяем загруженное состояние с дефолтным (на случай добавления новых полей)
+          this.state = this._mergeDeep(this._getDefaultState(), parsed);
+          console.log('[GameState] Сохранение загружено успешно');
+          return true;
+        } catch (err) {
+          console.error('[GameState] Ошибка загрузки сохранения:', err);
+          return false;
+        }
+      }
+
+      /**
+       * Сохранить текущее состояние в localStorage
+       */
+      save() {
+        try {
+          localStorage.setItem(this.SAVE_KEY, JSON.stringify(this.state));
+          Events.emit('state:saved');
+        } catch (err) {
+          console.error('[GameState] Ошибка сохранения состояния:', err);
+          Events.emit('state:save_error', err);
+        }
+      }
+
+      /**
+       * Полностью сбросить прогресс (удалить сохранение)
+       */
+      reset() {
+        try {
+          localStorage.removeItem(this.SAVE_KEY);
+          this.state = this._getDefaultState();
+          Events.emit('state:reset');
+          console.log('[GameState] Прогресс сброшен');
+        } catch (err) {
+          console.error('[GameState] Ошибка сброса прогресса:', err);
+        }
+      }
+
+      /**
+       * Выдать приветственный подарок новому игроку
+       * Вызывается ОДИН РАЗ после регистрации
+       */
+      applyWelcomeGift() {
+        // Начисляем стартовые валюты
+        this.state.currencies.sapphires   += 1500;
+        this.state.currencies.trainingPts += 1000;
+        this.state.currencies.ovrPoints   += 200;
+        this.state.currencies.fragments    += 300;
+        this.state.currencies.coupons      += 3;
+        this.state.currencies.tokens       += 10;
+
+        // Добавляем стартовых игроков в инвентарь
+        GAME_DATA.starterPlayers.forEach(player => {
+          this.addPlayer({ ...player });
+        });
+
+        // Расставляем стартовый состав
+        this.state.squad.slots = { ...GAME_DATA.starterSquad };
+        this.state.squad.bench = [...GAME_DATA.starterBench];
+
+        // Инициализируем прогресс квестов
+        GAME_DATA.quests.forEach(q => {
+          this.state.questProgress[q.id] = {
+            current:   0,
+            completed: false,
+            rewarded:  false,
+          };
+        });
+
+        this.save();
+        Events.emit('welcome_gift:applied');
+        console.log('[GameState] Приветственный подарок выдан');
+      }
+
+      /**
+       * Добавить игрока в инвентарь
+       * @param {Object} playerData - Данные карточки игрока
+       * @returns {string} Уникальный ID добавленной карточки
+       */
+      addPlayer(playerData) {
+        // Генерируем уникальный ID карточки (может быть несколько копий одного игрока)
+        const cardId = playerData.id + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+        this.state.players[cardId] = {
+          ...playerData,
+          cardId,
+          obtainedAt: Date.now(),
+        };
+        Events.emit('player:obtained', this.state.players[cardId]);
+        return cardId;
+      }
+
+      /**
+       * Удалить игрока из инвентаря по уникальному ID карточки
+       * @param {string} cardId - Уникальный ID карточки
+       * @returns {boolean} true если удаление успешно
+       */
+      removePlayer(cardId) {
+        if (!this.state.players[cardId]) return false;
+        const player = this.state.players[cardId];
+        delete this.state.players[cardId];
+
+        // Убираем из состава, если игрок был в составе
+        Object.keys(this.state.squad.slots).forEach(slot => {
+          if (this.state.squad.slots[slot] === cardId) {
+            delete this.state.squad.slots[slot];
+          }
+        });
+        this.state.squad.bench = this.state.squad.bench.filter(id => id !== cardId);
+
+        Events.emit('player:removed', player);
+        return true;
+      }
+
+      /**
+       * Получить игрока по уникальному ID карточки
+       * @param {string} cardId
+       * @returns {Object|null}
+       */
+      getPlayer(cardId) {
+        return this.state.players[cardId] || null;
+      }
+
+      /**
+       * Получить массив всех игроков инвентаря
+       * @returns {Array}
+       */
+      getAllPlayers() {
+        return Object.values(this.state.players);
+      }
+
+      /**
+       * Обновить значение валюты
+       * @param {string} currency - Ключ валюты ('sapphires', 'tokens', ...)
+       * @param {number} delta - Изменение (положительное или отрицательное)
+       * @returns {boolean} true если операция разрешена (нет ухода в минус)
+       */
+      updateCurrency(currency, delta) {
+        if (this.state.currencies[currency] === undefined) {
+          console.warn(`[GameState] Неизвестная валюта: ${currency}`);
+          return false;
+        }
+        const newVal = this.state.currencies[currency] + delta;
+        if (newVal < 0) return false; // Недостаточно средств
+        this.state.currencies[currency] = newVal;
+        Events.emit('currency:changed', { currency, value: newVal, delta });
+        return true;
+      }
+
+      /**
+       * Получить текущий баланс валюты
+       * @param {string} currency
+       * @returns {number}
+       */
+      getCurrency(currency) {
+        return this.state.currencies[currency] ?? 0;
+      }
+
+      /**
+       * Поставить игрока в слот основного состава
+       * @param {string} slot - Ключ слота ('GK', 'CB1', ...)
+       * @param {string} cardId - Уникальный ID карточки
+       */
+      setSquadSlot(slot, cardId) {
+        // Если этот игрок уже где-то в составе — убираем его оттуда
+        this._removeCardFromSquad(cardId);
+
+        // Если слот уже занят — убираем предыдущего игрока на скамейку (если место есть)
+        const prevCardId = this.state.squad.slots[slot];
+        if (prevCardId) {
+          if (this.state.squad.bench.length < 7) {
+            this.state.squad.bench.push(prevCardId);
+          }
+        }
+
+        this.state.squad.slots[slot] = cardId;
+        Events.emit('squad:updated', this.state.squad);
+      }
+
+      /**
+       * Поставить игрока на скамейку запасных
+       * @param {string} cardId
+       * @returns {boolean}
+       */
+      addToBench(cardId) {
+        if (this.state.squad.bench.length >= 7) return false;
+        if (this.state.squad.bench.includes(cardId)) return false;
+        this._removeCardFromSquad(cardId);
+        this.state.squad.bench.push(cardId);
+        Events.emit('squad:updated', this.state.squad);
+        return true;
+      }
+
+      /**
+       * Убрать карточку из всех позиций состава (внутренний метод)
+       * @param {string} cardId
+       */
+      _removeCardFromSquad(cardId) {
+        Object.keys(this.state.squad.slots).forEach(slot => {
+          if (this.state.squad.slots[slot] === cardId) {
+            delete this.state.squad.slots[slot];
+          }
+        });
+        this.state.squad.bench = this.state.squad.bench.filter(id => id !== cardId);
+      }
+
+      /**
+       * Вычислить текущий OVR состава (средний рейтинг 11 основных)
+       * @returns {number}
+       */
+      calcSquadOvr() {
+        const slotKeys = Object.keys(this.state.squad.slots);
+        if (slotKeys.length === 0) return 0;
+        const total = slotKeys.reduce((sum, slot) => {
+          const cardId = this.state.squad.slots[slot];
+          const player = this.state.players[cardId];
+          return sum + (player ? player.ovr : 0);
+        }, 0);
+        return Math.round(total / slotKeys.length);
+      }
+
+      /**
+       * Обновить статистику игры и проверить квесты
+       * @param {string} statKey - Ключ статистики
+       * @param {number} delta - Изменение
+       */
+      updateStat(statKey, delta = 1) {
+        if (this.state.stats[statKey] !== undefined) {
+          this.state.stats[statKey] += delta;
+        }
+        this._checkQuestProgress();
+      }
+
+      /**
+       * Проверить прогресс всех квестов и обновить их состояние
+       */
+      _checkQuestProgress() {
+        const stats      = this.state.stats;
+        const players    = this.getAllPlayers();
+        const squadOvr   = this.calcSquadOvr();
+        const filledSlots = Object.keys(this.state.squad.slots).length;
+
+        // Маппинг типов квестов на текущие значения
+        const currentValues = {
+          packs_opened:       stats.packsOpened,
+          squad_slots_filled: filledSlots,
+          total_players:      players.length,
+          squad_ovr:          squadOvr,
+          exchanges_done:     stats.exchangesDone,
+        };
+
+        GAME_DATA.quests.forEach(quest => {
+          const progress = this.state.questProgress[quest.id];
+          if (!progress || progress.completed) return;
+
+          const currentVal = currentValues[quest.type] ?? 0;
+          progress.current = Math.min(currentVal, quest.target);
+
+          if (progress.current >= quest.target && !progress.completed) {
+            progress.completed = true;
+            Events.emit('quest:completed', quest);
+          }
+        });
+      }
+
+      /**
+       * Выдать награду за квест
+       * @param {string} questId
+       * @returns {boolean} true если награда успешно выдана
+       */
+      claimQuestReward(questId) {
+        const progress = this.state.questProgress[questId];
+        if (!progress || !progress.completed || progress.rewarded) return false;
+
+        const quest = GAME_DATA.quests.find(q => q.id === questId);
+        if (!quest) return false;
+
+        // Начисляем награды
+        Object.entries(quest.reward).forEach(([currency, amount]) => {
+          if (currency === 'xp') {
+            this._addXp(amount);
+          } else {
+            this.updateCurrency(currency, amount);
+          }
+        });
+
+        progress.rewarded = true;
+        this.save();
+        Events.emit('quest:rewarded', quest);
+        return true;
+      }
+
+      /**
+       * Добавить XP и обработать повышение уровня
+       * @param {number} amount
+       */
+      _addXp(amount) {
+        this.state.currencies.xp += amount;
+        this.state.profile.xp   += amount;
+
+        // Проверяем повышение уровня
+        while (this.state.profile.xp >= this.state.profile.xpToNextLevel) {
+          this.state.profile.xp          -= this.state.profile.xpToNextLevel;
+          this.state.profile.level        += 1;
+          this.state.profile.xpToNextLevel = Math.round(this.state.profile.xpToNextLevel * 1.5);
+          Events.emit('profile:levelup', this.state.profile.level);
+        }
+      }
+
+      /**
+       * Глубокое слияние двух объектов (используется при загрузке сохранения)
+       * @param {Object} target - Базовый объект
+       * @param {Object} source - Источник (загруженные данные)
+       * @returns {Object}
+       */
+      _mergeDeep(target, source) {
+        const result = { ...target };
+        for (const key in source) {
+          if (
+            source[key] !== null &&
+            typeof source[key] === 'object' &&
+            !Array.isArray(source[key]) &&
+            typeof target[key] === 'object' &&
+            target[key] !== null &&
+            !Array.isArray(target[key])
+          ) {
+            result[key] = this._mergeDeep(target[key], source[key]);
+          } else {
+            result[key] = source[key];
+          }
+        }
+        return result;
+      }
+    }
+
+    // Глобальный экземпляр GameState
+    const State = new GameState();
+
+    /* ============================================================
+       ROUTER — МАРШРУТИЗАТОР ЭКРАНОВ
+       Управляет стеком навигации и переходами между экранами.
+       Поддерживает переходы вперёд (push) и назад (pop).
+       ============================================================ */
+    class Router {
+      constructor() {
+        // Стек навигации: ['main-menu', 'store', 'pack-opening']
+        this._stack = [];
+
+        // Карта зарегистрированных экранов: { screenId: ScreenObject }
+        this._screens = {};
+      }
+
+      /**
+       * Зарегистрировать экран в системе маршрутизации
+       * @param {string} id - ID экрана (соответствует id DOM-элемента без 'screen-')
+       * @param {Object} screenObj - Объект с методами init, onEnter, onLeave
+       */
+      register(id, screenObj) {
+        this._screens[id] = screenObj;
+        if (typeof screenObj.init === 'function') {
+          screenObj.init();
+        }
+      }
+
+      /**
+       * Перейти на экран (push в стек)
+       * @param {string} screenId - ID целевого экрана
+       * @param {Object} params - Параметры, передаваемые на экран
+       */
+      go(screenId, params = {}) {
+        const currentId = this._stack[this._stack.length - 1];
+
+        // Скрываем текущий экран
+        if (currentId) {
+          const currentEl = document.getElementById(`screen-${currentId}`);
+          if (currentEl) {
+            currentEl.classList.remove('active');
+            currentEl.classList.add('leaving');
+            setTimeout(() => currentEl.classList.remove('leaving'), 300);
+          }
+          // Вызываем хук ухода с экрана
+          if (this._screens[currentId] && typeof this._screens[currentId].onLeave === 'function') {
+            this._screens[currentId].onLeave();
+          }
+        }
+
+        // Добавляем в стек
+        this._stack.push(screenId);
+
+        // Показываем новый экран
+        const targetEl = document.getElementById(`screen-${screenId}`);
+        if (targetEl) {
+          targetEl.classList.add('active');
+        } else {
+          console.warn(`[Router] Экран "screen-${screenId}" не найден в DOM`);
+        }
+
+        // Вызываем хук входа на экран
+        if (this._screens[screenId] && typeof this._screens[screenId].onEnter === 'function') {
+          this._screens[screenId].onEnter(params);
+        }
+
+        Events.emit('screen:changed', screenId, params);
+        console.log(`[Router] → ${screenId}`, this._stack);
+      }
+
+      /**
+       * Вернуться на предыдущий экран (pop из стека)
+       */
+      back() {
+        if (this._stack.length <= 1) {
+          console.log('[Router] Уже на корневом экране, назад некуда');
+          return;
+        }
+
+        const currentId = this._stack.pop();
+        const prevId    = this._stack[this._stack.length - 1];
+
+        // Скрываем текущий
+        const currentEl = document.getElementById(`screen-${currentId}`);
+        if (currentEl) {
+          currentEl.classList.remove('active');
+          currentEl.classList.add('leaving');
+          setTimeout(() => currentEl.classList.remove('leaving'), 300);
+        }
+        if (this._screens[currentId] && typeof this._screens[currentId].onLeave === 'function') {
+          this._screens[currentId].onLeave();
+        }
+
+        // Показываем предыдущий
+        const prevEl = document.getElementById(`screen-${prevId}`);
+        if (prevEl) {
+          prevEl.classList.add('active');
+        }
+        if (this._screens[prevId] && typeof this._screens[prevId].onEnter === 'function') {
+          this._screens[prevId].onEnter();
+        }
+
+        Events.emit('screen:changed', prevId);
+        console.log(`[Router] ← ${prevId}`, this._stack);
+      }
+
+      /**
+       * Получить ID текущего активного экрана
+       * @returns {string|null}
+       */
+      current() {
+        return this._stack[this._stack.length - 1] || null;
+      }
+
+      /**
+       * Заменить текущий экран (без добавления в стек)
+       * @param {string} screenId
+       * @param {Object} params
+       */
+      replace(screenId, params = {}) {
+        if (this._stack.length > 0) this._stack.pop();
+        this.go(screenId, params);
+      }
+    }
+
+    // Глобальный экземпляр роутера
+    const AppRouter = new Router();
+
+    /* ============================================================
+       UI MANAGER — МЕНЕДЖЕР ПОЛЬЗОВАТЕЛЬСКОГО ИНТЕРФЕЙСА
+       Отвечает за глобальные UI-операции: модалки, тосты, лоадер,
+       обновление шапки и нижней навигации.
+       ============================================================ */
+    class UIManager {
+      constructor() {
+        // Очередь тостов (чтобы не накапливать бесконечно)
+        this._toastQueue = [];
+        this._toastActive = 0;
+        this.MAX_TOASTS   = 3;
+
+        // Текущая открытая модалка (или null)
+        this._currentModal = null;
+
+        // Ссылки на DOM-элементы (кэшируем для производительности)
+        this._els = {
+          modalOverlay: null,
+          modalTitle:   null,
+          modalBody:    null,
+          modalClose:   null,
+          loaderOverlay: null,
+          loaderText:    null,
+          toastContainer: null,
+        };
+      }
+
+      /**
+       * Инициализировать UIManager — кэшировать DOM-элементы
+       */
+      init() {
+        this._els.modalOverlay   = document.getElementById('modal-overlay');
+        this._els.modalTitle     = document.getElementById('modal-title');
+        this._els.modalBody      = document.getElementById('modal-body');
+        this._els.modalClose     = document.getElementById('modal-close-btn');
+        this._els.loaderOverlay  = document.getElementById('loader-overlay');
+        this._els.loaderText     = document.getElementById('loader-text');
+        this._els.toastContainer = document.getElementById('toast-container');
+
+        // Закрытие модалки по клику на фон
+        this._els.modalOverlay.addEventListener('click', e => {
+          if (e.target === this._els.modalOverlay) this.closeModal();
+        });
+
+        // Закрытие модалки по кнопке ✕
+        this._els.modalClose.addEventListener('click', () => this.closeModal());
+
+        // Глобальная обработка кнопок "Назад" ([data-back])
+        document.addEventListener('click', e => {
+          const backBtn = e.target.closest('[data-back]');
+          if (backBtn) AppRouter.back();
+        });
+      }
+
+      /**
+       * Обновить отображение всех валют в шапке и других местах
+       */
+      updateCurrencyDisplay() {
+        const sapphires = State.getCurrency('sapphires');
+        const tokens    = State.getCurrency('tokens');
+        const coupons   = State.getCurrency('coupons');
+
+        const elSap = document.getElementById('currency-sapphires');
+        const elTok = document.getElementById('currency-tokens');
+        const elCou = document.getElementById('store-coupons-count');
+
+        if (elSap) elSap.textContent = this._formatNumber(sapphires);
+        if (elTok) elTok.textContent = this._formatNumber(tokens);
+        if (elCou) elCou.textContent = coupons;
+      }
+
+      /**
+       * Обновить шапку главного меню (профиль, уровень, XP, OVR)
+       */
+      updateHeader() {
+        const profile = State.state.profile;
+        const ovr     = State.calcSquadOvr();
+
+        const elNick   = document.getElementById('header-nickname');
+        const elLevel  = document.getElementById('header-level-text');
+        const elOvr    = document.getElementById('header-ovr');
+        const elXpBar  = document.getElementById('header-xp-bar');
+
+        if (elNick)  elNick.textContent  = profile.nickname || 'Игрок';
+        if (elLevel) elLevel.textContent = `Уровень ${profile.level}`;
+        if (elOvr)   elOvr.textContent   = `OVR ${ovr || '—'}`;
+
+        if (elXpBar) {
+          const pct = Math.min(100, Math.round((profile.xp / profile.xpToNextLevel) * 100));
+          elXpBar.style.width = pct + '%';
+        }
+
+        this.updateCurrencyDisplay();
+      }
+
+      /**
+       * Обновить состояние нижней навигации (выделить активный таб)
+       * @param {string} activeScreenId
+       */
+      updateBottomNav(activeScreenId) {
+        const navItems = document.querySelectorAll('.nav-item[data-nav]');
+        navItems.forEach(item => {
+          const nav = item.dataset.nav;
+          item.classList.toggle('active', nav === activeScreenId);
+        });
+      }
+
+      /**
+       * Показать модальное окно
+       * @param {Object} config
+       * @param {string} config.title - Заголовок
+       * @param {string|HTMLElement} config.body - Содержимое (HTML-строка или DOM-узел)
+       * @param {boolean} [config.hideClose] - Скрыть кнопку закрытия
+       * @param {Function} [config.onClose] - Колбэк при закрытии
+       * @param {string} [config.extraClass] - Дополнительный CSS-класс для modal-sheet
+       */
+      showModal({ title, body, hideClose = false, onClose, extraClass = '' }) {
+        this._els.modalTitle.textContent = title || '';
+        this._els.modalClose.style.display = hideClose ? 'none' : 'flex';
+
+        // Очищаем тело модалки
+        this._els.modalBody.innerHTML = '';
+
+        if (typeof body === 'string') {
+          this._els.modalBody.innerHTML = body;
+        } else if (body instanceof HTMLElement) {
+          this._els.modalBody.appendChild(body);
+        }
+
+        // Дополнительные CSS-классы
+        const sheet = document.getElementById('modal-sheet');
+        sheet.className = 'modal-sheet ' + extraClass;
+
+        this._currentModal = { onClose };
+        this._els.modalOverlay.classList.add('visible');
+        document.body.style.overflow = 'hidden';
+      }
+
+      /**
+       * Закрыть текущую модалку
+       */
+      closeModal() {
+        if (!this._els.modalOverlay.classList.contains('visible')) return;
+        this._els.modalOverlay.classList.remove('visible');
+        document.body.style.overflow = '';
+
+        if (this._currentModal && typeof this._currentModal.onClose === 'function') {
+          this._currentModal.onClose();
+        }
+        this._currentModal = null;
+
+        // Небольшая задержка перед очисткой (анимация)
+        setTimeout(() => {
+          this._els.modalBody.innerHTML = '';
+        }, 300);
+      }
+
+      /**
+       * Показать toast-уведомление
+       * @param {string} message - Текст уведомления
+       * @param {'success'|'error'|'info'|'warning'} type - Тип
+       * @param {number} duration - Длительность в мс (default 3000)
+       */
+      showToast(message, type = 'info', duration = 3000) {
+        if (this._toastActive >= this.MAX_TOASTS) return;
+
+        const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `
+          <span class="toast-icon">${icons[type] || 'ℹ️'}</span>
+          <span class="toast-message">${message}</span>
+        `;
+
+        this._els.toastContainer.appendChild(toast);
+        this._toastActive++;
+
+        // Запускаем анимацию появления
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => toast.classList.add('visible'));
+        });
+
+        // Убираем тост через duration мс
+        setTimeout(() => {
+          toast.classList.add('hiding');
+          toast.classList.remove('visible');
+          setTimeout(() => {
+            toast.remove();
+            this._toastActive--;
+          }, 350);
+        }, duration);
+      }
+
+      /**
+       * Показать индикатор загрузки
+       * @param {string} text - Текст под спиннером
+       */
+      showLoader(text = 'Загрузка...') {
+        this._els.loaderText.textContent = text;
+        this._els.loaderOverlay.classList.add('visible');
+      }
+
+      /**
+       * Скрыть индикатор загрузки
+       */
+      hideLoader() {
+        this._els.loaderOverlay.classList.remove('visible');
+      }
+
+      /**
+       * Форматировать число для отображения (1500 → '1.5K')
+       * @param {number} n
+       * @returns {string}
+       */
+      _formatNumber(n) {
+        if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+        if (n >= 10_000)    return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+        return n.toString();
+      }
+    }
+
+    // Глобальный экземпляр UI Manager
+    const UI = new UIManager();
+
+    /* ============================================================
+       PLAYER CARD FACTORY — ФАБРИКА КАРТОЧЕК ИГРОКОВ
+       Создаёт DOM-элементы карточек для отображения в любом месте UI.
+       ============================================================ */
+    const PlayerCard = {
+      /**
+       * Создать DOM-элемент карточки игрока
+       * @param {Object} player - Данные игрока
+       * @param {string} [size='normal'] - Размер: 'small', 'normal', 'large'
+       * @param {boolean} [highlighted=false] - Выделена ли карточка
+       * @returns {HTMLElement}
+       */
+      create(player, size = 'normal', highlighted = false) {
+        const el = document.createElement('div');
+        el.className = `player-card ${player.grad || 'card-grad-standard'}`;
+        if (size === 'small') el.classList.add('small');
+        if (size === 'large') el.classList.add('large');
+        if (highlighted)      el.classList.add('highlighted');
+
+        // Сохраняем ID карточки в data-атрибуте
+        el.dataset.cardId = player.cardId || player.id;
+
+        el.innerHTML = `
+          <div class="card-ovr">${player.ovr}</div>
+          <div class="card-pos">${player.pos}</div>
+          <div class="card-flag">${player.nation || '🌍'}</div>
+          <div class="card-name">${this._shortName(player.name)}</div>
+        `;
+
+        return el;
+      },
+
+      /**
+       * Создать пустой слот-заглушку (для позиции без игрока)
+       * @param {string} pos - Позиция ('GK', 'CB', ...)
+       * @param {string} icon - Emoji-иконка
+       * @param {string} [size='normal']
+       * @returns {HTMLElement}
+       */
+      createEmpty(pos, icon = '➕', size = 'normal') {
+        const el = document.createElement('div');
+        el.className = `player-card card-grad-standard`;
+        if (size === 'small') el.classList.add('small');
+        if (size === 'large') el.classList.add('large');
+        el.style.opacity = '0.45';
+        el.style.border  = '2px dashed rgba(255,255,255,0.2)';
+        el.innerHTML = `
+          <div class="card-pos" style="top:50%;left:50%;transform:translate(-50%,-50%);font-size:22px;color:rgba(255,255,255,0.4);">${icon}</div>
+          <div class="card-name">${pos}</div>
+        `;
+        return el;
+      },
+
+      /**
+       * Сократить имя игрока для карточки (макс. 8 символов)
+       * @param {string} name
+       * @returns {string}
+       */
+      _shortName(name) {
+        if (!name) return '—';
+        const parts = name.trim().split(' ');
+        if (parts.length === 1) return name.slice(0, 8);
+        // Если два слова — показываем только фамилию
+        return parts[parts.length - 1].slice(0, 8);
+      },
+    };
+
+    /* ============================================================
+       HELPERS — ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+       Утилиты для генерации случайных игроков, форматирования и т.д.
+       ============================================================ */
+    const Helpers = {
+      /**
+       * Сгенерировать случайного игрока из пула имён
+       * @param {number} minOvr
+       * @param {number} maxOvr
+       * @param {string[]} grades - Доступные грейды для карточки
+       * @returns {Object} Данные игрока
+       */
+      generateRandomPlayer(minOvr, maxOvr, grades = ['standard']) {
+        const names    = GAME_DATA.randomPlayerNames;
+        const surnames = GAME_DATA.randomPlayerSurnames;
+        const nations  = GAME_DATA.randomNations;
+        const positions= GAME_DATA.allPositions;
+        const gradeMap = GAME_DATA.gradeGradients;
+
+        const name    = names[Math.floor(Math.random() * names.length)];
+        const surname = surnames[Math.floor(Math.random() * surnames.length)];
+        const nation  = nations[Math.floor(Math.random() * nations.length)];
+        const pos     = positions[Math.floor(Math.random() * positions.length)];
+        const ovr     = Math.floor(Math.random() * (maxOvr - minOvr + 1)) + minOvr;
+        const grade   = grades[Math.floor(Math.random() * grades.length)];
+        const grad    = gradeMap[grade] || 'card-grad-standard';
+
+        return {
+          id:      'gen_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          name:    `${name} ${surname}`,
+          pos,
+          ovr,
+          nation,
+          grad,
+          program: grade,
+        };
+      },
+
+      /**
+       * Задержка (Promise-based)
+       * @param {number} ms
+       * @returns {Promise}
+       */
+      sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+      },
+
+      /**
+       * Перемешать массив (алгоритм Фишера-Йейтса)
+       * @param {Array} arr
+       * @returns {Array} Новый перемешанный массив
+       */
+      shuffle(arr) {
+        const a = [...arr];
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      },
+
+      /**
+       * Генерировать уникальный ID
+       * @returns {string}
+       */
+      uid() {
+        return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      },
+
+      /**
+       * Форматировать число с разделителями тысяч
+       * @param {number} n
+       * @returns {string}
+       */
+      formatNum(n) {
+        return n.toLocaleString('ru-RU');
+      },
+
+      /**
+       * Зажать значение в диапазоне [min, max]
+       * @param {number} val
+       * @param {number} min
+       * @param {number} max
+       * @returns {number}
+       */
+      clamp(val, min, max) {
+        return Math.min(max, Math.max(min, val));
+      },
+    };
+
+    /* ============================================================
+       SCREENS — ОБЪЕКТЫ ЭКРАНОВ
+       Каждый экран — объект с методами:
+         init()      — вызывается один раз при регистрации
+         onEnter(p)  — вызывается каждый раз при переходе на экран
+         onLeave()   — вызывается при уходе с экрана
+       ============================================================ */
+
+    /* ----------------------------------------------------------
+       ЭКРАН: SPLASH
+       ---------------------------------------------------------- */
+    const ScreenSplash = {
+      init() {},
+      onEnter() {},
+      onLeave() {},
+    };
+
+    /* ----------------------------------------------------------
+       ЭКРАН: РЕГИСТРАЦИЯ
+       ---------------------------------------------------------- */
+    const ScreenRegistration = {
+      init() {
+        const btn      = document.getElementById('reg-submit-btn');
+        const nickInput= document.getElementById('reg-nickname');
+        const clubInput= document.getElementById('reg-club');
+
+        btn.addEventListener('click', () => this._submit(nickInput, clubInput));
+
+        // Сабмит по нажатию Enter
+        [nickInput, clubInput].forEach(el => {
+          el.addEventListener('keydown', e => {
+            if (e.key === 'Enter') this._submit(nickInput, clubInput);
+          });
+        });
+      },
+
+      onEnter() {
+        // Очищаем поля при возврате на экран
+        document.getElementById('reg-nickname').value = '';
+        document.getElementById('reg-club').value     = '';
+      },
+
+      onLeave() {},
+
+      /**
+       * Обработка отправки формы регистрации
+       */
+      _submit(nickInput, clubInput) {
+        const nickname = nickInput.value.trim();
+        const clubName = clubInput.value.trim();
+
+        if (!nickname) {
+          UI.showToast('Введи никнейм!', 'warning');
+          nickInput.focus();
+          return;
+        }
+        if (nickname.length < 2) {
+          UI.showToast('Никнейм слишком короткий (мин. 2 символа)', 'warning');
+          return;
+        }
+        if (!clubName) {
+          UI.showToast('Введи название клуба!', 'warning');
+          clubInput.focus();
+          return;
+        }
+
+        // Сохраняем данные профиля
+        State.state.profile.nickname  = nickname;
+        State.state.profile.clubName  = clubName;
+        State.state.profile.id        = 'FC_' + Helpers.uid().toUpperCase().slice(0, 8);
+        State.state.profile.createdAt = Date.now();
+        State.state.registered        = true;
+
+        // Применяем приветственный подарок
+        State.applyWelcomeGift();
+
+        // Переходим в главное меню
+        AppRouter.replace('main-menu');
+
+        // Показываем модалку приветственного подарка с задержкой
+        setTimeout(() => {
+          ScreenMainMenu.showWelcomeGiftModal();
+        }, 600);
+      },
+    };
+
+    /* ----------------------------------------------------------
+       ЭКРАН: ГЛАВНОЕ МЕНЮ (HUB)
+       ---------------------------------------------------------- */
+    const ScreenMainMenu = {
+      init() {
+        // Нижняя навигация
+        document.querySelectorAll('.nav-item[data-nav]').forEach(item => {
+          item.addEventListener('click', () => {
+            const nav = item.dataset.nav;
+            if (nav === 'main-menu') {
+              AppRouter.go('main-menu');
+            } else {
+              AppRouter.go(nav);
+            }
+          });
+        });
+
+        // Клик по аватару переходит в профиль
+        document.getElementById('header-avatar').addEventListener('click', () => {
+          AppRouter.go('profile');
+        });
+      },
+
+      onEnter() {
+        this._renderHubGrid();
+        UI.updateHeader();
+        UI.updateBottomNav('main-menu');
+      },
+
+      onLeave() {},
+
+      /**
+       * Отрисовать сетку плиток главного меню
+       */
+      _renderHubGrid() {
+        const grid = document.getElementById('hub-grid');
+        grid.innerHTML = '';
+
+        GAME_DATA.hubTiles.forEach(tile => {
+          const el = document.createElement('div');
+          el.className = 'hub-tile' + (tile.wide ? ' wide' : '');
+          el.innerHTML = `
+            <div class="hub-tile-icon">${tile.icon}</div>
+            <div class="hub-tile-name">${tile.name}</div>
+            <div class="hub-tile-desc">${tile.desc}</div>
+          `;
+          el.addEventListener('click', () => AppRouter.go(tile.screen));
+          grid.appendChild(el);
+        });
+      },
+
+      /**
+       * Показать модальное окно приветственного подарка
+       */
+      showWelcomeGiftModal() {
+        const C = GAME_DATA.currencyIcons;
+        const body = `
+          <div class="welcome-gift-modal">
+            <div class="welcome-gift-icon">🎁</div>
+            <div class="welcome-gift-title">Добро пожаловать!</div>
+            <div class="welcome-gift-desc">
+              Твой клуб <strong>${State.state.profile.clubName}</strong> только что получил стартовый подарок. 
+              Начни строить свою легенду!
+            </div>
+            <div class="welcome-gift-rewards">
+              <div class="welcome-reward-row">
+                <img src="${C.sapphires}" alt="Сапфиры"/>
+                <span class="welcome-reward-text">Сапфиры</span>
+                <span class="welcome-reward-value">+1 500</span>
+              </div>
+              <div class="welcome-reward-row">
+                <img src="${C.tokens}" alt="Токены"/>
+                <span class="welcome-reward-text">Offside Tokens</span>
+                <span class="welcome-reward-value">+10</span>
+              </div>
+              <div class="welcome-reward-row">
+                <img src="${C.trainingPts}" alt="Трен. очки"/>
+                <span class="welcome-reward-text">Тренировочные очки</span>
+                <span class="welcome-reward-value">+1 000</span>
+              </div>
+              <div class="welcome-reward-row">
+                <img src="${C.fragments}" alt="Фрагменты"/>
+                <span class="welcome-reward-text">Фрагменты</span>
+                <span class="welcome-reward-value">+300</span>
+              </div>
+              <div class="welcome-reward-row">
+                <img src="${C.coupons}" alt="Купоны"/>
+                <span class="welcome-reward-text">Купоны открытия</span>
+                <span class="welcome-reward-value">+3</span>
+              </div>
+              <div class="welcome-reward-row">
+                <span style="font-size:22px;">🃏</span>
+                <span class="welcome-reward-text">Стартовые игроки</span>
+                <span class="welcome-reward-value">×18</span>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="welcome-gift-ok">
+              ⚽ Начать играть!
+            </button>
+          </div>
+        `;
+
+        UI.showModal({ title: '', body, hideClose: true });
+
+        // Кнопка подтверждения
+        setTimeout(() => {
+          const btn = document.getElementById('welcome-gift-ok');
+          if (btn) btn.addEventListener('click', () => {
+            UI.closeModal();
+            State.state.welcomeGiftShown = true;
+            State.save();
+          });
+        }, 100);
+      },
+    };
+
+    /* ----------------------------------------------------------
+       ЭКРАН: МОИ ИГРОКИ
+       ---------------------------------------------------------- */
+    const ScreenPlayers = {
+      // Текущий активный фильтр
+      _activeFilter: 'all',
+      // Текущая сортировка
+      _sortBy: 'ovr_desc',
+
+      init() {
+        // Кнопка сортировки
+        document.getElementById('players-sort-btn').addEventListener('click', () => {
+          this._showSortModal();
+        });
+      },
+
+      onEnter() {
+        this._renderFilters();
+        this._renderGrid();
+      },
+
+      onLeave() {},
+
+      /**
+       * Отрисовать кнопки фильтров позиций
+       */
+      _renderFilters() {
+        const container = document.getElementById('players-filters');
+        container.innerHTML = '';
+
+        const filters = [
+          { key: 'all',  label: 'Все' },
+          { key: 'GK',   label: 'ВР'  },
+          { key: 'DEF',  label: 'Защ' },
+          { key: 'MID',  label: 'Пол' },
+          { key: 'FWD',  label: 'Нап' },
+        ];
+
+        filters.forEach(f => {
+          const chip = document.createElement('div');
+          chip.className = 'filter-chip' + (this._activeFilter === f.key ? ' active' : '');
+          chip.textContent = f.label;
+          chip.addEventListener('click', () => {
+            this._activeFilter = f.key;
+            this._renderFilters();
+            this._renderGrid();
+          });
+          container.appendChild(chip);
+        });
+      },
+
+      /**
+       * Отрисовать сетку карточек с учётом фильтра и сортировки
+       */
+      _renderGrid() {
+        const grid    = document.getElementById('players-grid');
+        grid.innerHTML = '';
+
+        let players = State.getAllPlayers();
+
+        // Применяем фильтр позиции
+        if (this._activeFilter !== 'all') {
+          const posGroups = {
+            GK:  ['GK'],
+            DEF: ['CB','LB','RB','LWB','RWB'],
+            MID: ['CM','LM','RM','DM','CAM','CDM'],
+            FWD: ['LW','RW','ST','CF','SS'],
+          };
+          const allowed = posGroups[this._activeFilter] || [];
+          players = players.filter(p => allowed.includes(p.pos));
+        }
+
+        // Применяем сортировку
+        players = this._sortPlayers(players);
+
+        if (players.length === 0) {
+          grid.innerHTML = `
+            <div class="empty-state" style="grid-column:1/-1;">
+              <div class="empty-state-icon">🃏</div>
+              <div class="empty-state-title">Нет игроков</div>
+              <div class="empty-state-desc">Открывай паки в магазине, чтобы пополнять состав!</div>
+            </div>
+          `;
+          return;
+        }
+
+        players.forEach(player => {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'players-grid-item';
+
+          const card = PlayerCard.create(player, 'small');
+          card.addEventListener('click', () => this._showPlayerModal(player));
+
+          const label = document.createElement('div');
+          label.className = 'card-label';
+          label.textContent = player.name.split(' ').pop();
+
+          wrapper.appendChild(card);
+          wrapper.appendChild(label);
+          grid.appendChild(wrapper);
+        });
+      },
+
+      /**
+       * Отсортировать массив игроков
+       * @param {Array} players
+       * @returns {Array}
+       */
+      _sortPlayers(players) {
+        const sorted = [...players];
+        switch (this._sortBy) {
+          case 'ovr_desc': return sorted.sort((a, b) => b.ovr - a.ovr);
+          case 'ovr_asc':  return sorted.sort((a, b) => a.ovr - b.ovr);
+          case 'name_asc': return sorted.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+          case 'new_first':return sorted.sort((a, b) => (b.obtainedAt||0) - (a.obtainedAt||0));
+          default:         return sorted;
+        }
+      },
+
+      /**
+       * Показать модалку с информацией об игроке
+       * @param {Object} player
+       */
+      _showPlayerModal(player) {
+        const inSquad  = Object.values(State.state.squad.slots).includes(player.cardId);
+        const onBench  = State.state.squad.bench.includes(player.cardId);
+        const squadStatus = inSquad ? '🟢 В основе' : onBench ? '🟡 На скамье' : '⚪ В запасе';
+
+        const C = GAME_DATA.currencyIcons;
+        const body = `
+          <div style="display:flex;flex-direction:column;align-items:center;gap:16px;">
+            <div id="player-modal-card-slot"></div>
+            <div style="text-align:center;">
+              <div style="font-size:20px;font-weight:900;color:var(--text-primary);">${player.name}</div>
+              <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">
+                ${player.nation || '🌍'} &nbsp; ${player.pos} &nbsp; · &nbsp; OVR <strong>${player.ovr}</strong>
+              </div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">${squadStatus}</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;">
+              <button class="btn btn-secondary" id="player-modal-squad-btn" style="font-size:13px;">
+                ${inSquad || onBench ? '🔄 Убрать из состава' : '➕ В состав'}
+              </button>
+            </div>
+          </div>
+        `;
+
+        UI.showModal({ title: 'Игрок', body });
+
+        // Добавляем карточку
+        setTimeout(() => {
+          const slot = document.getElementById('player-modal-card-slot');
+          if (slot) {
+            const card = PlayerCard.create(player, 'normal');
+            slot.appendChild(card);
+          }
+
+          // Кнопка управления составом
+          const squadBtn = document.getElementById('player-modal-squad-btn');
+          if (squadBtn) {
+            squadBtn.addEventListener('click', () => {
+              if (inSquad || onBench) {
+                State._removeCardFromSquad(player.cardId);
+                State.save();
+                UI.showToast(`${player.name.split(' ').pop()} убран из состава`, 'info');
+              } else {
+                const added = State.addToBench(player.cardId);
+                if (added) {
+                  State.save();
+                  UI.showToast(`${player.name.split(' ').pop()} добавлен на скамью`, 'success');
+                } else {
+                  UI.showToast('Скамейка заполнена (макс. 7)', 'warning');
+                }
+              }
+              UI.closeModal();
+              this._renderGrid();
+            });
+          }
+        }, 100);
+      },
+
+      /**
+       * Показать модалку выбора сортировки
+       */
+      _showSortModal() {
+        const options = [
+          { key: 'ovr_desc',  label: '⬇️ OVR: высокий → низкий' },
+          { key: 'ovr_asc',   label: '⬆️ OVR: низкий → высокий' },
+          { key: 'name_asc',  label: '🔤 Имя: А → Я' },
+          { key: 'new_first', label: '🆕 Сначала новые' },
+        ];
+
+        let html = '<div style="display:flex;flex-direction:column;gap:8px;">';
+        options.forEach(opt => {
+          const active = this._sortBy === opt.key;
+          html += `
+            <button class="btn ${active ? 'btn-primary' : 'btn-secondary'}"
+                    data-sort="${opt.key}" style="text-align:left;font-size:14px;">
+              ${opt.label}
+            </button>
+          `;
+        });
+        html += '</div>';
+
+        UI.showModal({ title: 'Сортировка', body: html });
+
+        setTimeout(() => {
+          document.querySelectorAll('[data-sort]').forEach(btn => {
+            btn.addEventListener('click', () => {
+              this._sortBy = btn.dataset.sort;
+              UI.closeModal();
+              this._renderGrid();
+            });
+          });
+        }, 100);
+      },
+    };
+
+    /* ----------------------------------------------------------
+       ЭКРАН: СОСТАВ
+       ---------------------------------------------------------- */
+    const ScreenSquad = {
+      init() {
+        document.getElementById('squad-save-btn').addEventListener('click', () => {
+          State.save();
+          UI.showToast('Состав сохранён!', 'success');
+        });
+      },
+
+      onEnter() {
+        this._renderFormation();
+        this._renderBench();
+        this._updateOvrDisplay();
+      },
+
+      onLeave() {},
+
+      /**
+       * Отрисовать поле с расстановкой 4-3-3
+       */
+      _renderFormation() {
+        const container = document.getElementById('formation-slots');
+        container.innerHTML = '';
+
+        // Рисуем ряды снизу вверх (GK → атака)
+        const rows = [...GAME_DATA.formation433].reverse();
+
+        rows.forEach(rowData => {
+          const rowEl = document.createElement('div');
+          rowEl.className = 'formation-row';
+
+          rowData.positions.forEach(slotDef => {
+            const cardId = State.state.squad.slots[slotDef.pos];
+            const player = cardId ? State.getPlayer(cardId) : null;
+
+            const slotEl = document.createElement('div');
+            slotEl.className = 'position-slot';
+            slotEl.dataset.slot = slotDef.pos;
+
+            const cardArea = document.createElement('div');
+            cardArea.className = 'slot-card-area' + (player ? ' filled' : '');
+
+            if (player) {
+              const card = PlayerCard.create(player, 'small');
+              cardArea.appendChild(card);
+            } else {
+              const icon = document.createElement('span');
+              icon.className = 'slot-icon';
+              icon.textContent = slotDef.icon;
+              cardArea.appendChild(icon);
+            }
+
+            const label = document.createElement('div');
+            label.className = 'slot-pos-label';
+            label.textContent = slotDef.label;
+
+            slotEl.appendChild(cardArea);
+            slotEl.appendChild(label);
+
+            // Клик по слоту открывает выбор игрока
+            slotEl.addEventListener('click', () => this._openSlotPicker(slotDef.pos, slotDef.label));
+
+            rowEl.appendChild(slotEl);
+          });
+
+          container.appendChild(rowEl);
+        });
+      },
+
+      /**
+       * Отрисовать скамейку запасных
+       */
+      _renderBench() {
+        const row = document.getElementById('bench-row');
+        row.innerHTML = '';
+
+        const benchIds = State.state.squad.bench;
+
+        // Показываем максимум 7 слотов скамейки
+        for (let i = 0; i < 7; i++) {
+          const cardId = benchIds[i];
+          const player = cardId ? State.getPlayer(cardId) : null;
+
+          const wrapper = document.createElement('div');
+          wrapper.style.display = 'flex';
+          wrapper.style.flexDirection = 'column';
+          wrapper.style.alignItems = 'center';
+          wrapper.style.gap = '4px';
+          wrapper.style.flexShrink = '0';
+
+          if (player) {
+            const card = PlayerCard.create(player, 'small');
+            card.addEventListener('click', () => this._openSlotPicker(null, null, cardId));
+            const lbl = document.createElement('div');
+            lbl.className = 'slot-pos-label';
+            lbl.style.color = 'var(--text-muted)';
+            lbl.textContent = player.pos;
+            wrapper.appendChild(card);
+            wrapper.appendChild(lbl);
+          } else {
+            const empty = PlayerCard.createEmpty(`${i + 1}`, '➕', 'small');
+            empty.style.opacity = '0.3';
+            const lbl = document.createElement('div');
+            lbl.className = 'slot-pos-label';
+            lbl.style.color = 'var(--text-muted)';
+            lbl.textContent = `Зап.${i + 1}`;
+            wrapper.appendChild(empty);
+            wrapper.appendChild(lbl);
+          }
+
+          row.appendChild(wrapper);
+        }
+      },
+
+      /**
+       * Обновить отображение рейтинга состава
+       */
+      _updateOvrDisplay() {
+        const el = document.getElementById('squad-ovr-display');
+        if (el) {
+          const ovr = State.calcSquadOvr();
+          el.textContent = ovr ? ovr : '—';
+        }
+        UI.updateHeader();
+      },
+
+      /**
+       * Открыть модалку выбора игрока для слота
+       * @param {string|null} slot - Ключ слота основного состава
+       * @param {string|null} slotLabel - Метка слота
+       * @param {string|null} benchCardId - ID карточки на скамье (если выбираем из скамьи)
+       */
+      _openSlotPicker(slot, slotLabel, benchCardId = null) {
+        // Получаем всех игроков, которые ещё не в составе (на скамье или вообще свободны)
+        const allPlayers = State.getAllPlayers();
+
+        // Сортируем по OVR убывания
+        const sorted = [...allPlayers].sort((a, b) => b.ovr - a.ovr);
+
+        const title = slot ? `Выбери игрока: ${slotLabel}` : 'Управление игроком';
+
+        const body = document.createElement('div');
+
+        if (benchCardId) {
+          // Если кликнули по скамейке — показываем опции для этого игрока
+          const player = State.getPlayer(benchCardId);
+          if (!player) { UI.showToast('Игрок не найден', 'error'); return; }
+
+          body.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+              <div id="slot-picker-preview"></div>
+              <div style="font-size:16px;font-weight:700;">${player.name}</div>
+              <div style="font-size:13px;color:var(--text-secondary);">${player.pos} · OVR ${player.ovr}</div>
+              <button class="btn btn-secondary" id="bench-remove-btn" style="width:100%;color:var(--accent-pink);border-color:rgba(255,59,122,0.3);">
+                ❌ Убрать со скамьи
+              </button>
+            </div>
+          `;
+
+          UI.showModal({ title: 'Скамейка', body });
+          setTimeout(() => {
+            const preview = document.getElementById('slot-picker-preview');
+            if (preview) preview.appendChild(PlayerCard.create(player, 'normal'));
+
+            const removeBtn = document.getElementById('bench-remove-btn');
+            if (removeBtn) {
+              removeBtn.addEventListener('click', () => {
+                State._removeCardFromSquad(benchCardId);
+                State.save();
+                UI.closeModal();
+                this.onEnter();
+                UI.showToast(`${player.name.split(' ').pop()} убран`, 'info');
+              });
+            }
+          }, 100);
+          return;
+        }
+
+        // Выбор игрока для основного слота
+        const grid = document.createElement('div');
+        grid.className = 'slot-picker-grid';
+
+        // Опция "Очистить слот"
+        const clearItem = document.createElement('div');
+        clearItem.className = 'slot-picker-item';
+        clearItem.innerHTML = `
+          <div style="width:58px;height:80px;border:2px dashed rgba(255,255,255,0.2);
+               border-radius:8px;display:flex;align-items:center;justify-content:center;
+               font-size:22px;color:rgba(255,255,255,0.3);">✕</div>
+          <div class="slot-picker-name" style="color:var(--accent-pink);">Очистить</div>
+        `;
+        clearItem.addEventListener('click', () => {
+          delete State.state.squad.slots[slot];
+          State.save();
+          UI.closeModal();
+          this.onEnter();
+        });
+        grid.appendChild(clearItem);
+
+        sorted.forEach(player => {
+          const inSlot = State.state.squad.slots[slot] === player.cardId;
+          const item   = document.createElement('div');
+          item.className = 'slot-picker-item' + (inSlot ? ' selected' : '');
+
+          const card = PlayerCard.create(player, 'small', inSlot);
+          const name = document.createElement('div');
+          name.className = 'slot-picker-name';
+          name.textContent = player.name.split(' ').pop();
+
+          item.appendChild(card);
+          item.appendChild(name);
+
+          item.addEventListener('click', () => {
+            State.setSquadSlot(slot, player.cardId);
+            State.save();
+            State._checkQuestProgress();
+            UI.closeModal();
+            this.onEnter();
+            UI.showToast(`${player.name.split(' ').pop()} поставлен на позицию ${slotLabel}`, 'success');
+          });
+
+          grid.appendChild(item);
+        });
+
+        if (sorted.length === 0) {
+          grid.innerHTML = `
+            <div class="empty-state" style="grid-column:1/-1;">
+              <div class="empty-state-icon">🃏</div>
+              <div class="empty-state-title">Нет игроков</div>
+              <div class="empty-state-desc">Сначала открой паки в магазине!</div>
+            </div>
+          `;
+        }
+
+        body.appendChild(grid);
+        UI.showModal({ title, body });
+      },
+    };
+
+    /* ----------------------------------------------------------
+       ЭКРАН: МАГАЗИН
+       ---------------------------------------------------------- */
+    const ScreenStore = {
+      init() {},
+
+      onEnter() {
+        this._renderPacks();
+        this._renderCurrencyOffers();
+        UI.updateCurrencyDisplay();
+      },
+
+      onLeave() {},
+
+      /**
+       * Отрисовать список паков
+       */
+      _renderPacks() {
+        const row = document.getElementById('packs-row');
+        row.innerHTML = '';
+
+        const C = GAME_DATA.currencyIcons;
+
+        GAME_DATA.packs.forEach(pack => {
+          const el = document.createElement('div');
+          el.className = 'pack-card';
+          el.innerHTML = `
+            <div class="pack-card-visual ${pack.visual}">
+              <span style="position:relative;z-index:1;font-size:48px;">${pack.icon}</span>
+            </div>
+            <div class="pack-card-info">
+              <div class="pack-card-name">${pack.name}</div>
+              <div class="pack-card-desc">${pack.desc}</div>
+              <div class="pack-card-price">
+                <img src="${C[pack.currency]}" alt="${pack.currency}"/>
+                ${Helpers.formatNum(pack.price)}
+              </div>
+            </div>
+          `;
+
+          el.addEventListener('click', () => this._confirmPurchase(pack));
+          row.appendChild(el);
+        });
+      },
+
+      /**
+       * Отрисовать предложения пополнения валюты
+       */
+      _renderCurrencyOffers() {
+        const grid = document.getElementById('currency-offers-grid');
+        grid.innerHTML = '';
+
+        const C = GAME_DATA.currencyIcons;
+
+        GAME_DATA.currencyOffers.forEach((offer, idx) => {
+          const el = document.createElement('div');
+          el.className = 'currency-offer-card' + (offer.featured ? ' featured' : '');
+          el.innerHTML = `
+            <img src="${C[offer.icon]}" alt="${offer.icon}" class="currency-offer-icon"/>
+            <div class="currency-offer-amount">${Helpers.formatNum(offer.amount)}</div>
+            ${offer.bonus ? `<div class="currency-offer-bonus">+${offer.bonus} бонус</div>` : '<div style="height:16px;"></div>'}
+            <div class="currency-offer-price">${offer.price}</div>
+          `;
+
+          el.addEventListener('click', () => this._handleCurrencyOffer(offer, idx));
+          grid.appendChild(el);
+        });
+      },
+
+      /**
+       * Показать подтверждение покупки пака
+       * @param {Object} pack
+       */
+      _confirmPurchase(pack) {
+        const balance  = State.getCurrency(pack.currency);
+        const canAfford= balance >= pack.price;
+        const C        = GAME_DATA.currencyIcons;
+
+        const body = `
+          <div style="display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;">
+            <div style="font-size:52px;">${pack.icon}</div>
+            <div style="font-size:18px;font-weight:900;color:var(--text-primary);">${pack.name}</div>
+            <div style="font-size:13px;color:var(--text-secondary);">${pack.desc}</div>
+            <div style="background:var(--bg-card);border:1px solid var(--border-color);
+                 border-radius:var(--border-radius);padding:12px 20px;width:100%;
+                 display:flex;align-items:center;justify-content:space-between;">
+              <span style="font-size:13px;color:var(--text-secondary);">Стоимость</span>
+              <span style="display:flex;align-items:center;gap:6px;font-weight:800;font-size:16px;">
+                <img src="${C[pack.currency]}" style="width:18px;height:18px;object-fit:contain;"/>
+                ${Helpers.formatNum(pack.price)}
+              </span>
+            </div>
+            <div style="background:var(--bg-card);border:1px solid var(--border-color);
+                 border-radius:var(--border-radius);padding:12px 20px;width:100%;
+                 display:flex;align-items:center;justify-content:space-between;">
+              <span style="font-size:13px;color:var(--text-secondary);">Твой баланс</span>
+              <span style="display:flex;align-items:center;gap:6px;font-weight:800;font-size:16px;
+                    color:${canAfford ? 'var(--text-primary)' : 'var(--accent-pink)'};">
+                <img src="${C[pack.currency]}" style="width:18px;height:18px;object-fit:contain;"/>
+                ${Helpers.formatNum(balance)}
+              </span>
+            </div>
+            ${!canAfford ? `
+              <div style="font-size:13px;color:var(--accent-pink);font-weight:600;">
+                ❌ Недостаточно средств
+              </div>
+            ` : ''}
+            <button class="btn btn-primary" id="confirm-buy-btn"
+                    style="width:100%;${!canAfford ? 'opacity:0.4;pointer-events:none;' : ''}">
+              🛒 Купить и открыть
+            </button>
+          </div>
+        `;
+
+        UI.showModal({ title: 'Купить пак', body });
+
+        setTimeout(() => {
+          const btn = document.getElementById('confirm-buy-btn');
+          if (btn && canAfford) {
+            btn.addEventListener('click', () => {
+              // Списываем валюту
+              const ok = State.updateCurrency(pack.currency, -pack.price);
+              if (!ok) {
+                UI.showToast('Недостаточно средств!', 'error');
+                UI.closeModal();
+                return;
+              }
+              State.save();
+              UI.closeModal();
+              // Переходим на экран открытия пака
+              AppRouter.go('pack-opening', { pack });
+            });
+          }
+        }, 100);
+      },
+
+      /**
+       * Обработать нажатие на предложение валюты
+       * @param {Object} offer
+       * @param {number} idx
+       */
+      _handleCurrencyOffer(offer, idx) {
+        // Первое предложение — бесплатно (реклама)
+        if (idx === 0) {
+          UI.showLoader('Смотрим рекламу...');
+          setTimeout(() => {
+            UI.hideLoader();
+            const totalAmount = offer.amount + (parseInt(offer.bonus) || 0);
+            State.updateCurrency(offer.icon, totalAmount);
+            State.save();
+            UI.updateCurrencyDisplay();
+            UI.showToast(`+${Helpers.formatNum(totalAmount)} ${offer.icon === 'sapphires' ? 'Сапфиров' : 'Токенов'} получено!`, 'success');
+          }, 2000);
+          return;
+        }
+
+        // Платные предложения — заглушка (покупка через платёжный шлюз)
+        UI.showModal({
+          title: 'Пополнение',
+          body: `
+            <div style="text-align:center;padding:12px 0;">
+              <div style="font-size:48px;margin-bottom:12px;">💳</div>
+              <div style="font-size:16px;font-weight:700;margin-bottom:8px;">
+                Покупка за ${offer.price}
+              </div>
+              <div style="font-size:13px;color:var(--text-secondary);margin-bottom:20px;">
+                Платёжный шлюз в разработке.<br>
+                В демо-режиме валюта добавляется бесплатно!
+              </div>
+              <button class="btn btn-primary" id="demo-buy-btn" style="width:100%;">
+                ✅ Получить (демо)
+              </button>
+            </div>
+          `,
+        });
+
+        setTimeout(() => {
+          const btn = document.getElementById('demo-buy-btn');
+          if (btn) {
+            btn.addEventListener('click', () => {
+              const totalAmount = offer.amount + (parseInt(offer.bonus) || 0);
+              State.updateCurrency(offer.icon, totalAmount);
+              State.save();
+              UI.closeModal();
+              UI.updateCurrencyDisplay();
+              UI.showToast(`+${Helpers.formatNum(totalAmount)} получено!`, 'success');
+            });
+          }
+        }, 100);
+      },
+    };
+
+    /* ----------------------------------------------------------
+       ЭКРАН: ОТКРЫТИЕ ПАКА
+       ---------------------------------------------------------- */
+    const ScreenPackOpening = {
+      // Данные текущего открываемого пака
+      _pack: null,
+      // Сгенерированные карточки
+      _cards: [],
+      // Флаг — открытие уже запущено
+      _isOpening: false,
+
+      init() {},
+
+      onEnter({ pack } = {}) {
+        if (!pack) {
+          AppRouter.back();
+          return;
+        }
+        this._pack     = pack;
+        this._cards    = [];
+        this._isOpening= false;
+
+        document.getElementById('pack-opening-screen-title').textContent = pack.name;
+        this._renderPreOpen();
+      },
+
+      onLeave() {
+        this._pack      = null;
+        this._cards     = [];
+        this._isOpening = false;
+      },
+
+      /**
+       * Отрисовать экран до открытия (анимированный пак)
+       */
+      _renderPreOpen() {
+        const wrapper = document.getElementById('pack-opening-wrapper');
+        wrapper.innerHTML = '';
+
+        const packVisual = document.createElement('div');
+        packVisual.className = 'pack-visual-hero';
+
+        const packBox = document.createElement('div');
+        packBox.className = `pack-hero-box ${this._pack.visual}`;
+        packBox.innerHTML = `<span style="position:relative;z-index:1;font-size:72px;">${this._pack.icon}</span>`;
+
+        const tapHint = document.createElement('div');
+        tapHint.className = 'pack-hint';
+        tapHint.style.marginTop = '24px';
+        tapHint.style.fontSize  = '16px';
+        tapHint.textContent     = 'Нажми, чтобы открыть!';
+
+        const packName = document.createElement('div');
+        packName.style.fontSize   = '20px';
+        packName.style.fontWeight = '900';
+        packName.style.color      = 'var(--text-primary)';
+        packName.style.marginBottom= '8px';
+        packName.textContent      = this._pack.name;
+
+        packVisual.appendChild(packName);
+        packVisual.appendChild(packBox);
+        packVisual.appendChild(tapHint);
+        wrapper.appendChild(packVisual);
+
+        // Клик по паку запускает открытие
+        packBox.addEventListener('click', () => {
+          if (!this._isOpening) this._openPack();
+        });
+      },
+
+      /**
+       * Запустить анимацию и логику открытия пака
+       */
+      async _openPack() {
+        if (this._isOpening) return;
+        this._isOpening = true;
+
+        const wrapper = document.getElementById('pack-opening-wrapper');
+
+        // Генерируем карточки
+        this._cards = [];
+        for (let i = 0; i < this._pack.count; i++) {
+          const player = Helpers.generateRandomPlayer(
+            this._pack.minOvr,
+            this._pack.maxOvr,
+            this._pack.grades,
+          );
+          const cardId = State.addPlayer(player);
+          this._cards.push({ ...player, cardId });
+        }
+
+        // Обновляем статистику
+        State.updateStat('packsOpened', 1);
+        State.save();
+
+        // Анимация "взрыва" пака
+        const packBox = wrapper.querySelector('.pack-hero-box');
+        if (packBox) {
+          packBox.style.animation = 'pack-shake 0.6s ease forwards';
+        }
+
+        await Helpers.sleep(600);
+
+        // Переходим к отображению карточек
+        wrapper.innerHTML = '';
+
+        const title = document.createElement('div');
+        title.style.fontSize   = '18px';
+        title.style.fontWeight = '900';
+        title.style.color      = 'var(--text-primary)';
+        title.style.marginBottom = '16px';
+        title.style.textAlign  = 'center';
+        title.textContent      = '🎉 Получено!';
+        wrapper.appendChild(title);
+
+        const resultsGrid = document.createElement('div');
+        resultsGrid.className = 'pack-results';
+        wrapper.appendChild(resultsGrid);
+
+        // Поочерёдно показываем карточки
+        for (let i = 0; i < this._cards.length; i++) {
+          const player  = this._cards[i];
+          const item    = document.createElement('div');
+          item.className= 'pack-result-item';
+
+          const card = PlayerCard.create(player, 'normal');
+          const lbl  = document.createElement('div');
+          lbl.className   = 'pack-hint';
+          lbl.textContent = player.name.split(' ').pop();
+
+          item.appendChild(card);
+          item.appendChild(lbl);
+          resultsGrid.appendChild(item);
+
+          // Небольшая задержка между картами
+          await Helpers.sleep(180);
+          item.classList.add('revealed');
+        }
+
+        // Кнопка "Закрыть"
+        await Helpers.sleep(300);
+
+        const doneBtn = document.createElement('button');
+        doneBtn.className   = 'btn btn-primary';
+        doneBtn.style.marginTop = '20px';
+        doneBtn.style.width = '100%';
+        doneBtn.textContent = '✅ Отлично!';
+        doneBtn.addEventListener('click', () => AppRouter.back());
+        wrapper.appendChild(doneBtn);
+
+        // Тост с результатом
+        UI.showToast(`Получено ${this._cards.length} игроков из ${this._pack.name}!`, 'success');
+
+        // Проверяем квесты
+        State._checkQuestProgress();
+        UI.updateHeader();
+      },
+    };
+
+    /* ----------------------------------------------------------
+       ЭКРАН: СОБЫТИЯ
+       ---------------------------------------------------------- */
+    const ScreenEvents = {
+      init() {},
+
+      onEnter() {
+        this._renderEvents();
+      },
+
+      onLeave() {},
+
+      _renderEvents() {
+        const list = document.getElementById('events-list');
+        list.innerHTML = '';
+
+        if (GAME_DATA.events.length === 0) {
+          list.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">🎉</div>
+              <div class="empty-state-title">Нет активных событий</div>
+              <div class="empty-state-desc">Возвращайся позже — скоро будут новые ивенты!</div>
+            </div>
+          `;
+          return;
+        }
+
+        GAME_DATA.events.forEach((evt, idx) => {
+          const el = document.createElement('div');
+          el.className = 'event-card';
+          el.innerHTML = `
+            <div class="event-banner ${evt.banner}">
+              <span style="font-size:48px;position:relative;z-index:1;">${evt.icon}</span>
+              <div class="event-timer">⏱ ${evt.endsIn}</div>
+            </div>
+            <div class="event-info">
+              <div class="event-name">${evt.name}</div>
+              <div class="event-desc">${evt.desc}</div>
+              <div class="event-reward-row">
+                <span class="event-reward-label">🏆 Награда:</span>
+                <span class="event-reward-value">${evt.reward}</span>
+              </div>
+              <button class="btn btn-primary event-join-btn" data-evt-idx="${idx}"
+                      style="margin-top:10px;width:100%;">
+                Участвовать
+              </button>
+            </div>
+          `;
+          list.appendChild(el);
+        });
+
+        // Обработчики кнопок участия
+        list.querySelectorAll('.event-join-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            UI.showToast('Функция турниров скоро будет доступна!', 'info');
+          });
+        });
+      },
+    };
+
+    /* ----------------------------------------------------------
+       ЭКРАН: КВЕСТЫ
+       ---------------------------------------------------------- */
+    const ScreenQuests = {
+      init() {},
+
+      onEnter() {
+        this._renderQuests();
+      },
+
+      onLeave() {},
+
+      _renderQuests() {
+        const list = document.getElementById('quests-list');
+        list.innerHTML = '';
+
+        const C = GAME_DATA.currencyIcons;
+
+        GAME_DATA.quests.forEach(quest => {
+          const progress = State.state.questProgress[quest.id] || {
+            current: 0, completed: false, rewarded: false,
+          };
+
+          const pct         = Math.min(100, Math.round((progress.current / quest.target) * 100));
+          const isCompleted = progress.completed;
+          const isRewarded  = progress.rewarded;
+
+          // Строим строку наград
+          let rewardHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">';
+          Object.entries(quest.reward).forEach(([cur, amt]) => {
+            const iconSrc = C[cur];
+            if (iconSrc) {
+              rewardHtml += `
+                <span style="display:inline-flex;align-items:center;gap:3px;
+                      font-size:12px;font-weight:700;color:var(--accent-gold);">
+                  <img src="${iconSrc}" style="width:14px;height:14px;object-fit:contain;"/>
+                  +${amt}
+                </span>
+              `;
+            } else {
+              rewardHtml += `
+                <span style="font-size:12px;font-weight:700;color:var(--accent-gold);">
+                  +${amt} XP
+                </span>
+              `;
+            }
+          });
+          rewardHtml += '</div>';
+
+          const el = document.createElement('div');
+          el.className = 'quest-card' + (isRewarded ? ' rewarded' : '');
+          el.innerHTML = `
+            <div class="quest-header">
+              <div class="quest-icon">${quest.icon}</div>
+              <div class="quest-info">
+                <div class="quest-name">${quest.name}</div>
+                <div class="quest-desc">${quest.description}</div>
+                ${rewardHtml}
+              </div>
+              ${isRewarded ? '<div class="quest-done-badge">✅</div>' : ''}
+            </div>
+            <div class="quest-progress-row">
+              <div class="quest-progress-bar-bg">
+                <div class="quest-progress-bar-fill" style="width:${pct}%;"></div>
+              </div>
+              <div class="quest-progress-text">${progress.current}/${quest.target}</div>
+            </div>
+            ${isCompleted && !isRewarded ? `
+              <button class="btn btn-primary quest-claim-btn" data-quest-id="${quest.id}"
+                      style="margin-top:10px;width:100%;">
+                🎁 Получить награду
+              </button>
+            ` : ''}
+          `;
+          list.appendChild(el);
+        });
+
+        // Обработчики кнопок получения наград
+        list.querySelectorAll('.quest-claim-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const questId = btn.dataset.questId;
+            const claimed = State.claimQuestReward(questId);
+            if (claimed) {
+              UI.showToast('Награда получена!', 'success');
+              UI.updateHeader();
+              this._renderQuests();
+            }
+          });
+        });
+      },
+    };
+
+    /* ----------------------------------------------------------
+       ЭКРАН: ОБМЕНЫ
+       ---------------------------------------------------------- */
+    const ScreenExchanges = {
+      init() {},
+
+      onEnter() {
+        this._renderExchanges();
+      },
+
+      onLeave() {},
+
+      _renderExchanges() {
+        const list = document.getElementById('exchanges-list');
+        list.innerHTML = '';
+
+        const C = GAME_DATA.currencyIcons;
+
+        GAME_DATA.exchanges.forEach(recipe => {
+          // Проверяем доступность обмена
+          const canExchange = recipe.ingredients.every(ing => {
+            return State.getCurrency(ing.icon) >= ing.amount;
+          });
+
+          // Строим ингредиенты
+          let ingredHtml = '';
+          recipe.ingredients.forEach((ing, idx) => {
+            const balance  = State.getCurrency(ing.icon);
+            const enough   = balance >= ing.amount;
+            const iconSrc  = C[ing.icon] || '';
+
+            ingredHtml += `
+              <div class="exchange-ingredient ${enough ? '' : 'insufficient'}">
+                ${iconSrc ? `<img src="${iconSrc}" style="width:20px;height:20px;object-fit:contain;"/>` : ''}
+                <div>
+                  <div style="font-size:12px;font-weight:700;">${ing.label}</div>
+                  <div style="font-size:11px;color:${enough ? 'var(--text-muted)' : 'var(--accent-pink)'};">
+                    ${balance}/${ing.amount}
+                  </div>
+                </div>
+              </div>
+            `;
+            if (idx < recipe.ingredients.length - 1) {
+              ingredHtml += `<div class="exchange-plus">+</div>`;
+            }
+          });
+
+          // Строим результат
+          const resIconSrc = recipe.result.icon ? (C[recipe.result.icon] || '') : '';
+          const resultHtml = `
+            <div class="exchange-result">
+              ${resIconSrc ? `<img src="${resIconSrc}" style="width:24px;height:24px;object-fit:contain;"/>` : '<span style="font-size:22px;">🃏</span>'}
+              <div>
+                <div style="font-size:13px;font-weight:700;">${recipe.result.label}</div>
+                <div style="font-size:12px;color:var(--accent-gold);">×${recipe.result.amount}</div>
+              </div>
+            </div>
+          `;
+
+          const el = document.createElement('div');
+          el.className = 'exchange-card';
+          el.innerHTML = `
+            <div class="exchange-card-header">
+              <div class="exchange-card-name">${recipe.name}</div>
+              <span class="exchange-badge">${recipe.badge}</span>
+            </div>
+            <div class="exchange-row">
+              <div class="exchange-ingredients">${ingredHtml}</div>
+              <div class="exchange-arrow">→</div>
+              ${resultHtml}
+            </div>
+            <button class="btn ${canExchange ? 'btn-primary' : 'btn-secondary'} exchange-do-btn"
+                    data-recipe-id="${recipe.id}"
+                    style="margin-top:10px;width:100%;${!canExchange ? 'opacity:0.5;pointer-events:none;' : ''}">
+              ${canExchange ? '🔄 Обменять' : '❌ Недостаточно ресурсов'}
+            </button>
+          `;
+          list.appendChild(el);
+        });
+
+        // Обработчики кнопок обмена
+        list.querySelectorAll('.exchange-do-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const recipeId = btn.dataset.recipeId;
+            this._doExchange(recipeId);
+          });
+        });
+      },
+
+      /**
+       * Выполнить обмен по рецепту
+       * @param {string} recipeId
+       */
+      _doExchange(recipeId) {
+        const recipe = GAME_DATA.exchanges.find(r => r.id === recipeId);
+        if (!recipe) return;
+
+        // Повторная проверка ресурсов
+        const canExchange = recipe.ingredients.every(ing =>
+          State.getCurrency(ing.icon) >= ing.amount
+        );
+        if (!canExchange) {
+          UI.showToast('Недостаточно ресурсов!', 'error');
+          return;
+        }
+
+        // Списываем ресурсы
+        recipe.ingredients.forEach(ing => {
+          State.updateCurrency(ing.icon, -ing.amount);
+        });
+
+        // Выдаём результат
+        if (recipe.result.isPlayer) {
+          // Результат — случайный игрок
+          const player = Helpers.generateRandomPlayer(
+            recipe.result.minOvr,
+            recipe.result.maxOvr,
+            [recipe.result.grade],
+          );
+          const cardId = State.addPlayer(player);
+          UI.showToast(
+            `Получен игрок: ${player.name} (OVR ${player.ovr})!`,
+            'success',
+            4000,
+          );
+        } else {
+          State.updateCurrency(recipe.result.icon, recipe.result.amount);
+          UI.showToast(
+            `Обмен выполнен: +${recipe.result.amount} ${recipe.result.label}!`,
+            'success',
+          );
+        }
+
+        // Обновляем статистику и квесты
+        State.updateStat('exchangesDone', 1);
+        State.save();
+        UI.updateHeader();
+
+        // Перерисовываем список
+        this._renderExchanges();
+      },
+    };
+
+    /* ----------------------------------------------------------
+       ЭКРАН: ДИВИЗИОН
+       ---------------------------------------------------------- */
+    const ScreenDivision = {
+      init() {},
+
+      onEnter() {
+        this._renderBanner();
+        this._renderRivals();
+      },
+
+      onLeave() {},
+
+      _renderBanner() {
+        const div   = State.state.division;
+        const stars = div.stars;
+        const max   = div.maxStars;
+
+        const elName  = document.getElementById('division-name');
+        const elRank  = document.getElementById('division-rank');
+        const elStars = document.getElementById('division-stars');
+
+        if (elName)  elName.textContent  = div.name;
+        if (elRank)  elRank.textContent  = `Ранг: ${div.rank}`;
+
+        if (elStars) {
+          let starsHtml = '';
+          for (let i = 0; i < max; i++) {
+            starsHtml += `<span style="font-size:22px;opacity:${i < stars ? '1' : '0.25'};">⭐</span>`;
+          }
+          elStars.innerHTML = starsHtml;
+        }
+      },
+
+      _renderRivals() {
+        const list = document.getElementById('rivals-list');
+        list.innerHTML = '';
+
+        const myOvr = State.calcSquadOvr() || 65;
+
+        GAME_DATA.rivals.forEach(rival => {
+          const diff      = rival.ovr - myOvr;
+          const difficulty= diff > 4 ? '🔴 Сложно' : diff < -4 ? '🟢 Легко' : '🟡 Равно';
+
+          const el = document.createElement('div');
+          el.className = 'rival-card';
+          el.innerHTML = `
+            <div class="rival-avatar">${rival.avatar}</div>
+            <div class="rival-info">
+              <div class="rival-name">${rival.name}</div>
+              <div class="rival-stats">
+                OVR ${rival.ovr} &nbsp;·&nbsp; ${rival.wins}В / ${rival.losses}П
+              </div>
+              <div style="font-size:11px;margin-top:2px;">${difficulty}</div>
+            </div>
+            <button class="btn btn-primary rival-play-btn"
+                    style="font-size:12px;padding:8px 14px;flex-shrink:0;">
+              ⚽ Играть
+            </button>
+          `;
+
+          el.querySelector('.rival-play-btn').addEventListener('click', () => {
+            this._simulateMatch(rival);
+          });
+
+          list.appendChild(el);
+        });
+      },
+
+      /**
+       * Симуляция матча против соперника
+       * @param {Object} rival
+       */
+      _simulateMatch(rival) {
+        const myOvr   = State.calcSquadOvr() || 65;
+        // Вероятность победы зависит от разницы OVR
+        const ovrDiff = myOvr - rival.ovr;
+        const winProb = Helpers.clamp(0.5 + ovrDiff * 0.04, 0.1, 0.9);
+        const won     = Math.random() < winProb;
+
+        const myGoals  = won
+          ? Math.floor(Math.random() * 3) + 1
+          : Math.floor(Math.random() * 2);
+        const rivGoals = won
+          ? Math.max(0, myGoals - Math.floor(Math.random() * 2) - 1)
+          : Math.floor(Math.random() * 3) + 1;
+
+        UI.showLoader('Идёт матч...');
+
+        setTimeout(() => {
+          UI.hideLoader();
+
+          // Обновляем статистику
+          State.updateStat('matchesPlayed', 1);
+          if (won) {
+            State.updateStat('matchesWon', 1);
+            // Начисляем звёзды дивизиона
+            if (State.state.division.stars < State.state.division.maxStars) {
+              State.state.division.stars++;
+            }
+            State.updateCurrency('sapphires', 150);
+            State.updateCurrency('divStars', 1);
+          } else {
+            if (State.state.division.stars > 0) {
+              State.state.division.stars--;
+            }
+          }
+
+          State.save();
+          UI.updateHeader();
+          this._renderBanner();
+
+          // Показываем результат матча
+          UI.showModal({
+            title: 'Результат матча',
+            body: `
+              <div style="text-align:center;padding:8px 0;">
+                <div style="font-size:56px;margin-bottom:12px;">${won ? '🏆' : '😔'}</div>
+                <div style="font-size:28px;font-weight:900;color:var(--text-primary);margin-bottom:4px;">
+                  ${myGoals} : ${rivGoals}
+                </div>
+                <div style="font-size:15px;color:${won ? 'var(--accent-teal)' : 'var(--accent-pink)'};
+                     font-weight:700;margin-bottom:16px;">
+                  ${won ? '✅ Победа!' : '❌ Поражение'}
+                </div>
+                <div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">
+                  Соперник: <strong>${rival.name}</strong>
+                </div>
+                ${won ? `
+                  <div style="background:var(--bg-card);border:1px solid var(--border-color);
+                       border-radius:var(--border-radius);padding:12px;margin-top:12px;">
+                    <div style="font-size:13px;font-weight:700;margin-bottom:8px;">Награды:</div>
+                    <div style="display:flex;align-items:center;gap:8px;justify-content:center;">
+                      <img src="${GAME_DATA.currencyIcons.sapphires}"
+                           style="width:18px;height:18px;object-fit:contain;"/>
+                      <span style="font-weight:700;color:var(--accent-gold);">+150 Сапфиров</span>
+                    </div>
+                  </div>
+                ` : ''}
+                <button class="btn btn-primary" id="match-result-ok"
+                        style="margin-top:16px;width:100%;">
+                  OK
+                </button>
+              </div>
+            `,
+          });
+
+          setTimeout(() => {
+            const btn = document.getElementById('match-result-ok');
+            if (btn) btn.addEventListener('click', () => UI.closeModal());
+          }, 100);
+        }, 2500);
+      },
+    };
+
+    /* ----------------------------------------------------------
+       ЭКРАН: ДРУЗЬЯ
+       ---------------------------------------------------------- */
+    const ScreenFriends = {
+      // Демо-список друзей
+      _demoFriends: [
+        { name: 'AlexFC99',    club: 'Динамо Альфа',    ovr: 71, avatar: '🦁', online: true  },
+        { name: 'Striker_King',club: 'Бешеные Быки',    ovr: 68, avatar: '🐂', online: false },
+        { name: 'GoalMachine', club: 'Чёрные Пантеры',  ovr: 74, avatar: '🐆', online: true  },
+      ],
+
+      init() {
+        document.getElementById('add-friend-btn').addEventListener('click', () => {
+          UI.showModal({
+            title: 'Добавить друга',
+            body: `
+              <div style="display:flex;flex-direction:column;gap:12px;">
+                <div class="form-group">
+                  <label class="form-label">Никнейм или ID игрока</label>
+                  <input type="text" class="form-input" id="friend-search-input"
+                         placeholder="Введи никнейм..." autocomplete="off"/>
+                </div>
+                <button class="btn btn-primary" id="friend-search-btn">🔍
+                                  Найти игрока
+                </button>
+                <div id="friend-search-result"></div>
+              </div>
+            `,
+          });
+
+          setTimeout(() => {
+            const searchBtn = document.getElementById('friend-search-btn');
+            const searchInput = document.getElementById('friend-search-input');
+            if (searchBtn) {
+              searchBtn.addEventListener('click', () => {
+                const query = searchInput.value.trim();
+                if (!query) {
+                  UI.showToast('Введи никнейм для поиска!', 'warning');
+                  return;
+                }
+                const resultEl = document.getElementById('friend-search-result');
+                // Демо-поиск: всегда находим заглушку
+                resultEl.innerHTML = `
+                  <div style="background:var(--bg-card);border:1px solid var(--border-color);
+                       border-radius:var(--border-radius);padding:12px;margin-top:4px;">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                      <div style="font-size:32px;">⚽</div>
+                      <div style="flex:1;">
+                        <div style="font-weight:700;">${query}</div>
+                        <div style="font-size:12px;color:var(--text-muted);">OVR 66 · Уровень 4</div>
+                      </div>
+                      <button class="btn btn-primary" id="send-request-btn"
+                              style="font-size:12px;padding:8px 12px;">
+                        + Добавить
+                      </button>
+                    </div>
+                  </div>
+                `;
+                setTimeout(() => {
+                  const addBtn = document.getElementById('send-request-btn');
+                  if (addBtn) {
+                    addBtn.addEventListener('click', () => {
+                      UI.closeModal();
+                      UI.showToast(`Запрос отправлен игроку ${query}!`, 'success');
+                    });
+                  }
+                }, 50);
+              });
+            }
+          }, 100);
+        });
+      },
+
+      onEnter() {
+        this._renderFriends();
+      },
+
+      onLeave() {},
+
+      /**
+       * Отрисовать список друзей
+       */
+      _renderFriends() {
+        const list = document.getElementById('friends-list');
+        list.innerHTML = '';
+
+        if (this._demoFriends.length === 0) {
+          list.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">👥</div>
+              <div class="empty-state-title">Нет друзей</div>
+              <div class="empty-state-desc">Добавь друзей, чтобы соревноваться и обмениваться!</div>
+            </div>
+          `;
+          return;
+        }
+
+        this._demoFriends.forEach(friend => {
+          const el = document.createElement('div');
+          el.className = 'friend-card';
+          el.innerHTML = `
+            <div class="friend-avatar">
+              ${friend.avatar}
+              <div class="friend-online-dot ${friend.online ? 'online' : 'offline'}"></div>
+            </div>
+            <div class="friend-info">
+              <div class="friend-name">${friend.name}</div>
+              <div class="friend-club">${friend.club}</div>
+              <div class="friend-ovr">OVR ${friend.ovr}</div>
+            </div>
+            <div class="friend-actions">
+              <button class="btn btn-secondary friend-visit-btn"
+                      style="font-size:12px;padding:8px 12px;">
+                👁 Клуб
+              </button>
+            </div>
+          `;
+
+          el.querySelector('.friend-visit-btn').addEventListener('click', () => {
+            UI.showToast(`Просмотр клуба ${friend.name} скоро будет доступен!`, 'info');
+          });
+
+          list.appendChild(el);
+        });
+      },
+    };
+
+    /* ----------------------------------------------------------
+       ЭКРАН: ПРОФИЛЬ
+       ---------------------------------------------------------- */
+    const ScreenProfile = {
+      init() {
+        // Кнопка редактирования профиля
+        document.getElementById('profile-edit-btn').addEventListener('click', () => {
+          this._showEditModal();
+        });
+
+        // Кнопка сброса прогресса
+        document.getElementById('profile-reset-btn').addEventListener('click', () => {
+          this._showResetConfirm();
+        });
+      },
+
+      onEnter() {
+        this._render();
+      },
+
+      onLeave() {},
+
+      /**
+       * Отрисовать данные профиля
+       */
+      _render() {
+        const profile = State.state.profile;
+        const stats   = State.state.stats;
+        const players = State.getAllPlayers();
+        const ovr     = State.calcSquadOvr();
+
+        // Шапка профиля
+        const elAvatar = document.getElementById('profile-big-avatar');
+        const elName   = document.getElementById('profile-screen-name');
+        const elClub   = document.getElementById('profile-screen-club');
+        const elId     = document.getElementById('profile-screen-id');
+
+        if (elAvatar) elAvatar.textContent = profile.avatar || '⚽';
+        if (elName)   elName.textContent   = profile.nickname || '—';
+        if (elClub)   elClub.textContent   = profile.clubName || '—';
+        if (elId)     elId.textContent     = `ID: ${profile.id || '—'}`;
+
+        // Сетка статистики
+        const grid = document.getElementById('profile-stats-grid');
+        if (grid) {
+          const statItems = [
+            { label: 'Уровень',        value: profile.level,           icon: '🎖️' },
+            { label: 'OVR Состава',    value: ovr || '—',              icon: '📊' },
+            { label: 'Игроков',        value: players.length,          icon: '🃏' },
+            { label: 'Паков открыто',  value: stats.packsOpened,       icon: '📦' },
+            { label: 'Матчей',         value: stats.matchesPlayed,     icon: '⚽' },
+            { label: 'Побед',          value: stats.matchesWon,        icon: '🏆' },
+            { label: 'Обменов',        value: stats.exchangesDone,     icon: '🔄' },
+            { label: 'Дивизион',       value: State.state.division.rank, icon: '🥇' },
+          ];
+
+          grid.innerHTML = '';
+          statItems.forEach(item => {
+            const cell = document.createElement('div');
+            cell.className = 'profile-stat-cell';
+            cell.innerHTML = `
+              <div class="profile-stat-icon">${item.icon}</div>
+              <div class="profile-stat-value">${item.value}</div>
+              <div class="profile-stat-label">${item.label}</div>
+            `;
+            grid.appendChild(cell);
+          });
+        }
+      },
+
+      /**
+       * Показать модалку редактирования профиля
+       */
+      _showEditModal() {
+        const profile = State.state.profile;
+
+        // Набор аватаров на выбор
+        const avatarOptions = ['⚽','🏆','⚡','🦁','🐺','🦅','🔥','💎','🌟','👑','🛡️','⚔️'];
+
+        let avatarsHtml = '';
+        avatarOptions.forEach(av => {
+          const active = profile.avatar === av;
+          avatarsHtml += `
+            <div class="avatar-option ${active ? 'selected' : ''}"
+                 data-avatar="${av}" style="cursor:pointer;font-size:28px;
+                 padding:8px;border-radius:12px;text-align:center;
+                 background:${active ? 'rgba(255,255,255,0.15)' : 'transparent'};
+                 border:2px solid ${active ? 'var(--accent-blue)' : 'transparent'};
+                 transition:all 0.2s;">
+              ${av}
+            </div>
+          `;
+        });
+
+        const body = `
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div class="form-group">
+              <label class="form-label">Никнейм</label>
+              <input type="text" class="form-input" id="edit-nickname"
+                     value="${profile.nickname}" maxlength="20"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Название клуба</label>
+              <input type="text" class="form-input" id="edit-club"
+                     value="${profile.clubName}" maxlength="24"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Аватар</label>
+              <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:6px;">
+                ${avatarsHtml}
+              </div>
+            </div>
+            <button class="btn btn-primary" id="save-profile-btn">
+              💾 Сохранить
+            </button>
+          </div>
+        `;
+
+        UI.showModal({ title: 'Редактировать профиль', body });
+
+        setTimeout(() => {
+          // Выбор аватара
+          let selectedAvatar = profile.avatar;
+          document.querySelectorAll('.avatar-option').forEach(opt => {
+            opt.addEventListener('click', () => {
+              selectedAvatar = opt.dataset.avatar;
+              document.querySelectorAll('.avatar-option').forEach(o => {
+                const isActive = o.dataset.avatar === selectedAvatar;
+                o.style.background = isActive ? 'rgba(255,255,255,0.15)' : 'transparent';
+                o.style.border     = `2px solid ${isActive ? 'var(--accent-blue)' : 'transparent'}`;
+              });
+            });
+          });
+
+          // Сохранение изменений
+          const saveBtn = document.getElementById('save-profile-btn');
+          if (saveBtn) {
+            saveBtn.addEventListener('click', () => {
+              const newNick = document.getElementById('edit-nickname').value.trim();
+              const newClub = document.getElementById('edit-club').value.trim();
+
+              if (!newNick || newNick.length < 2) {
+                UI.showToast('Никнейм слишком короткий!', 'warning');
+                return;
+              }
+              if (!newClub) {
+                UI.showToast('Введи название клуба!', 'warning');
+                return;
+              }
+
+              State.state.profile.nickname = newNick;
+              State.state.profile.clubName = newClub;
+              State.state.profile.avatar   = selectedAvatar;
+              State.save();
+
+              UI.closeModal();
+              this._render();
+              UI.updateHeader();
+              UI.showToast('Профиль обновлён!', 'success');
+            });
+          }
+        }, 100);
+      },
+
+      /**
+       * Показать подтверждение сброса прогресса
+       */
+      _showResetConfirm() {
+        UI.showModal({
+          title: '⚠️ Сброс прогресса',
+          body: `
+            <div style="text-align:center;padding:8px 0;">
+              <div style="font-size:48px;margin-bottom:16px;">🗑️</div>
+              <div style="font-size:16px;font-weight:700;margin-bottom:8px;">
+                Ты уверен?
+              </div>
+              <div style="font-size:13px;color:var(--text-secondary);margin-bottom:20px;line-height:1.6;">
+                Весь прогресс, игроки, валюта и достижения<br>
+                будут <strong style="color:var(--accent-pink);">безвозвратно удалены</strong>.
+              </div>
+              <div style="display:flex;gap:10px;">
+                <button class="btn btn-secondary" id="reset-cancel-btn" style="flex:1;">
+                  Отмена
+                </button>
+                <button class="btn btn-primary" id="reset-confirm-btn"
+                        style="flex:1;background:var(--accent-pink);border-color:var(--accent-pink);">
+                  Сбросить
+                </button>
+              </div>
+            </div>
+          `,
+          hideClose: false,
+        });
+
+        setTimeout(() => {
+          const cancelBtn  = document.getElementById('reset-cancel-btn');
+          const confirmBtn = document.getElementById('reset-confirm-btn');
+
+          if (cancelBtn)  cancelBtn.addEventListener('click', () => UI.closeModal());
+          if (confirmBtn) {
+            confirmBtn.addEventListener('click', () => {
+              State.reset();
+              UI.closeModal();
+              // Перезагружаем страницу для чистого старта
+              setTimeout(() => window.location.reload(), 300);
+            });
+          }
+        }, 100);
+      },
+    };
+
+    /* ============================================================
+       ПОДПИСКИ НА ГЛОБАЛЬНЫЕ СОБЫТИЯ
+       Связываем шину событий с обновлением UI
+       ============================================================ */
+
+    // Любое изменение валюты — обновляем шапку
+    Events.on('currency:changed', () => {
+      UI.updateCurrencyDisplay();
+    });
+
+    // Получен новый игрок
+    Events.on('player:obtained', player => {
+      console.log('[Event] Получен игрок:', player.name, 'OVR', player.ovr);
+    });
+
+    // Квест выполнен — показываем тост
+    Events.on('quest:completed', quest => {
+      UI.showToast(`✅ Квест выполнен: «${quest.name}»! Забери награду!`, 'success', 4000);
+    });
+
+    // Повышение уровня
+    Events.on('profile:levelup', level => {
+      UI.showToast(`🎉 Новый уровень: ${level}!`, 'success', 4000);
+      UI.updateHeader();
+    });
+
+    // Обновление состава — пересчитываем OVR в шапке
+    Events.on('squad:updated', () => {
+      UI.updateHeader();
+    });
+
+    // При смене экрана обновляем нижнюю навигацию
+    Events.on('screen:changed', screenId => {
+      UI.updateBottomNav(screenId);
+    });
+
+    /* ============================================================
+       ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ
+       Точка входа — вызывается после полной загрузки DOM.
+       ============================================================ */
+
+    /**
+     * Главная функция инициализации
+     * Порядок: UI → Router → State → Screens → Navigation
+     */
+    function initApp() {
+      console.log('[App] Запуск Offside FC...');
+
+      // --- Шаг 1: Инициализируем UIManager ---
+      UI.init();
+
+      // --- Шаг 2: Регистрируем все экраны в роутере ---
+      AppRouter.register('splash',       ScreenSplash);
+      AppRouter.register('registration', ScreenRegistration);
+      AppRouter.register('main-menu',    ScreenMainMenu);
+      AppRouter.register('players',      ScreenPlayers);
+      AppRouter.register('squad',        ScreenSquad);
+      AppRouter.register('store',        ScreenStore);
+      AppRouter.register('pack-opening', ScreenPackOpening);
+      AppRouter.register('events',       ScreenEvents);
+      AppRouter.register('quests',       ScreenQuests);
+      AppRouter.register('exchanges',    ScreenExchanges);
+      AppRouter.register('division',     ScreenDivision);
+      AppRouter.register('friends',      ScreenFriends);
+      AppRouter.register('profile',      ScreenProfile);
+
+      // --- Шаг 3: Загружаем сохранение ---
+      const hasSave = State.load();
+
+      // --- Шаг 4: Определяем стартовый экран ---
+      if (!hasSave || !State.state.registered) {
+        // Новый игрок — показываем сплэш, потом регистрацию
+        AppRouter.go('splash');
+        UI.showLoader('Загрузка...');
+
+        setTimeout(() => {
+          UI.hideLoader();
+          AppRouter.replace('registration');
+        }, 1800);
+      } else {
+        // Вернувшийся игрок — сразу в главное меню
+        AppRouter.go('main-menu');
+        UI.updateHeader();
+        console.log('[App] Добро пожаловать назад,', State.state.profile.nickname);
+      }
+
+      // --- Шаг 5: Показываем приветственный подарок ---
+      // (если игрок уже зарегистрирован, но ещё не видел подарок)
+      if (hasSave && State.state.registered && !State.state.welcomeGiftShown) {
+        setTimeout(() => {
+          ScreenMainMenu.showWelcomeGiftModal();
+        }, 800);
+      }
+
+      // --- Шаг 6: Периодическое автосохранение (каждые 60 сек) ---
+      setInterval(() => {
+        if (State.state.registered) {
+          State.save();
+          console.log('[App] Автосохранение...');
+        }
+      }, 60_000);
+
+      // --- Шаг 7: Сохраняем при уходе со страницы ---
+      window.addEventListener('beforeunload', () => {
+        if (State.state.registered) {
+          State.save();
+        }
+      });
+
+      // --- Шаг 8: Обработка аппаратной кнопки "Назад" (Android) ---
+      window.addEventListener('popstate', () => {
+        if (AppRouter.current() !== 'main-menu' && AppRouter.current() !== 'registration') {
+          AppRouter.back();
+        }
+      });
+
+      console.log('[App] Инициализация завершена ✅');
+    }
+
+    /* ============================================================
+       СТАРТУЕМ ПОСЛЕ ЗАГРУЗКИ DOM
+       ============================================================ */
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initApp);
+    } else {
+      // DOM уже готов (скрипт с defer или в конце body)
+      initApp();
+    }
+
+  </script>
+</body>
+</html>

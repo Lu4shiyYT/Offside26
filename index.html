@@ -2410,6 +2410,7 @@ html, body {
   background-clip: text;
   letter-spacing: 4px;
   margin-bottom: 10px;
+  white-space: nowrap;
 }
 .loader-tagline {
   font-size: 13px;
@@ -2419,7 +2420,8 @@ html, body {
   margin-bottom: 40px;
 }
 .loader-bar-wrap {
-  width: 200px;
+  width: 320px;
+  max-width: 90vw;
   height: 4px;
   background: rgba(255,255,255,0.1);
   border-radius: 2px;
@@ -2431,13 +2433,7 @@ html, body {
   background: var(--gradient-btn);
   border-radius: 2px;
   width: 0%;
-  animation: loadProgress 1.8s ease forwards;
-}
-@keyframes loadProgress {
-  0%   { width: 0%; }
-  60%  { width: 75%; }
-  90%  { width: 92%; }
-  100% { width: 100%; }
+  transition: width 0.1s linear;
 }
 .loader-status {
   font-size: 11px;
@@ -3413,9 +3409,9 @@ html, body {
     <div class="loader-logo">OFFSIDE 26</div>
     <div class="loader-tagline">The Ultimate Football Experience</div>
     <div class="loader-bar-wrap">
-      <div class="loader-bar"></div>
+      <div class="loader-bar" id="loading-bar"></div>
     </div>
-    <div class="loader-status" id="loader-status">Загрузка данных...</div>
+    <div class="loader-status" id="loading-pct">0%</div>
   </div>
 </div>
 
@@ -6298,7 +6294,7 @@ const App = (() => {
 
   // ЗАМЕНИТЬ функцию init() на эту:
 function init() {
-  const loader = document.getElementById('screen-loading');
+  const loader = document.getElementById('screen-loader');
   const bar    = document.getElementById('loading-bar');
   const pctEl  = document.getElementById('loading-pct');
 

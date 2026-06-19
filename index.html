@@ -6296,26 +6296,53 @@ const App = (() => {
   //  ИНИЦИАЛИЗАЦИЯ
   // ----------------------------------------------------------
 
-  function init() {
-    const saved = loadState();
+  // ЗАМЕНИТЬ функцию init() на эту:
+function init() {
+  // Показать загрузку
+  const loader = document.getElementById('screen-loading');
+  const bar    = document.getElementById('loading-bar');
 
-    if (saved && state.registered) {
-      showScreen('main');
-      updateUI();
-      startSlider();
-      generateMarket();
-      checkDailyBonus();
-    } else {
-      document.getElementById('screen-register').classList.add('active');
+  let progress = 0;
+  const interval = setInterval(() => {
+    progress += rand(8, 18);
+    if (bar) bar.style.width = Math.min(progress, 100) + '%';
+
+    if (progress >= 100) {
+      clearInterval(interval);
+
+      setTimeout(() => {
+        // Скрыть загрузку
+        if (loader) {
+          loader.style.opacity = '0';
+          loader.style.transition = 'opacity 0.5s';
+          setTimeout(() => {
+            loader.style.display = 'none';
+            loader.classList.remove('active');
+          }, 500);
+        }
+
+        // Загрузить сохранение
+        const saved = loadState();
+
+        if (saved && state.registered) {
+          showScreen('main');
+          updateUI();
+          startSlider();
+          generateMarket();
+          checkDailyBonus();
+        } else {
+          document.getElementById('screen-register')?.classList.add('active');
+        }
+
+        // Автосохранение каждые 30 сек
+        setInterval(saveState, 30000);
+        updateLeagueTimer();
+        setInterval(updateLeagueTimer, 60000);
+
+      }, 300);
     }
-
-    // Автосохранение каждые 30 сек
-    setInterval(saveState, 30000);
-
-    // Таймер лиги
-    updateLeagueTimer();
-    setInterval(updateLeagueTimer, 60000);
-  }
+  }, 120);
+}
 
   function updateLeagueTimer() {
     const el = document.getElementById('league-timer');

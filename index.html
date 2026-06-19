@@ -37,7 +37,6 @@
             touch-action: manipulation;
         }
 
-        /* ==================== ОСНОВНОЙ КОНТЕЙНЕР ==================== */
         #app {
             display: flex;
             flex-direction: column;
@@ -46,7 +45,6 @@
             position: relative;
         }
 
-        /* ==================== ВЕРХНЯЯ ПАНЕЛЬ ==================== */
         .top-bar {
             display: flex;
             align-items: center;
@@ -113,16 +111,13 @@
     </style>
 </head>
 <body>
-    <div id="app">
-        <!-- ВЕРХНЯЯ ПАНЕЛЬ (генерируется JS) -->
-    </div>
+    <div id="app"></div>
 
     <script>
-        /* ==================== ОСНОВНЫЕ КОНСТАНТЫ И ДАННЫЕ ==================== */
+        /* ==================== ОСНОВНЫЕ КОНСТАНТЫ ==================== */
         const GAME_NAME = 'Offside 26';
         const STORAGE_KEY = 'offside26_save';
 
-        // Валюты (иконки)
         const CURRENCIES = {
             sapphires: { name: 'Сапфиры', icon: 'https://i.ibb.co/5gkW9zFJ/image.png' },
             offsideTokens: { name: 'Offside-токены', icon: 'https://i.ibb.co/Cpq33M9q/Offside.png' },
@@ -136,16 +131,13 @@
             coins: { name: 'Монеты', icon: 'https://i.ibb.co/JRnypxvR/image.png' }
         };
 
-        // Позиции
         const POSITIONS = ['GK', 'LB', 'CB', 'RB', 'CDM', 'CM', 'CAM', 'LM', 'RM', 'LW', 'ST', 'RW', 'CF'];
 
-        // Схемы (4-3-3 по умолчанию)
         const DEFAULT_FORMATION = {
             name: '4-3-3',
             slots: ['GK', 'LB', 'CB', 'CB', 'RB', 'CM', 'CM', 'CM', 'LW', 'ST', 'RW']
         };
 
-        // Дивизионы и звезды
         const DIVISIONS = [
             { name: 'Bronze III', minStars: 0, maxStars: 3, rewards: null },
             { name: 'Bronze II', minStars: 4, maxStars: 6, rewards: { sapphires: 1000, seasonPoints: 150, ovrPoints: 100 } },
@@ -164,82 +156,61 @@
             { name: 'Diamond I', minStars: 70, maxStars: Infinity, rewards: { sapphires: 50000, seasonPoints: 500, ovrPoints: 1000, coupons: 20 } }
         ];
 
-        // Генератор ID
         function generateUniqueId() {
             let id = '';
-            for (let i = 0; i < 15; i++) {
-                id += Math.floor(Math.random() * 10);
-            }
+            for (let i = 0; i < 15; i++) id += Math.floor(Math.random() * 10);
             return id;
         }
 
-        // Генератор имён (простой)
-        const FIRST_NAMES = ['Raul', 'Marco', 'Luis', 'Diego', 'Carlos', 'Javier', 'Andres', 'Sergio', 'Pedro', 'Miguel',
-                             'Alex', 'Leo', 'Nico', 'Hugo', 'Pablo', 'Oscar', 'Ivan', 'Rafael', 'Daniel', 'Adrian'];
-        const LAST_NAMES = ['Rangel', 'Silva', 'Santos', 'Oliveira', 'Pereira', 'Costa', 'Rodriguez', 'Martinez', 'Garcia',
-                            'Lopez', 'Hernandez', 'Gonzalez', 'Morales', 'Torres', 'Ruiz', 'Diaz', 'Ramos', 'Vargas', 'Cruz', 'Medina'];
+        const FIRST_NAMES = ['Raul','Marco','Luis','Diego','Carlos','Javier','Andres','Sergio','Pedro','Miguel',
+                              'Alex','Leo','Nico','Hugo','Pablo','Oscar','Ivan','Rafael','Daniel','Adrian'];
+        const LAST_NAMES = ['Rangel','Silva','Santos','Oliveira','Pereira','Costa','Rodriguez','Martinez','Garcia',
+                            'Lopez','Hernandez','Gonzalez','Morales','Torres','Ruiz','Diaz','Ramos','Vargas','Cruz','Medina'];
 
         function generateRandomPlayerName() {
-            const first = FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)];
-            const last = LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)];
-            return `${first} ${last}`;
-        }
-
-        // Генерация стартового набора игроков (18 шт., схема 4-3-3 + запас)
-        function createStarterPlayers() {
-            const players = [];
-            const starterPositions = ['GK', 'LB', 'CB', 'CB', 'RB', 'CM', 'CM', 'CM', 'LW', 'ST', 'RW'];
-            const benchPositions = ['GK', 'CB', 'LB', 'CDM', 'CAM', 'ST', 'LW'];
-
-            let idCounter = 1;
-            // Основа
-            starterPositions.forEach(pos => {
-                players.push(createPlayer(idCounter++, pos, false));
-            });
-            // Запас
-            benchPositions.forEach(pos => {
-                players.push(createPlayer(idCounter++, pos, false));
-            });
-            return players;
+            return `${FIRST_NAMES[Math.floor(Math.random()*FIRST_NAMES.length)]} ${LAST_NAMES[Math.floor(Math.random()*LAST_NAMES.length)]}`;
         }
 
         function createPlayer(id, position, isTradeable = true) {
             const name = generateRandomPlayerName();
-            const nation = name.split(' ')[1]; // условно
+            const nation = name.split(' ')[1];
             const club = nation + ' City';
-            const ovr = Math.floor(Math.random() * 15) + 60; // 60-74
+            const ovr = Math.floor(Math.random() * 15) + 60;
             const stats = position === 'GK' ? {
-                REF: ovr + 2, KIC: ovr - 5, PAS: ovr - 5, SPE: ovr - 3, DIV: ovr, HAN: ovr + 1
+                REF: ovr+2, KIC: ovr-5, PAS: ovr-5, SPE: ovr-3, DIV: ovr, HAN: ovr+1
             } : {
                 PAC: ovr + Math.floor(Math.random()*5),
                 PAS: ovr + Math.floor(Math.random()*3),
                 DRB: ovr + Math.floor(Math.random()*4),
                 SHO: ovr + Math.floor(Math.random()*5),
-                DEF: position.includes('B') || position.includes('CDM') ? ovr + 5 : ovr - 5,
+                DEF: (position.includes('B')||position==='CDM') ? ovr+5 : ovr-5,
                 STR: ovr + Math.floor(Math.random()*6)
             };
             return {
-                id: id,
-                name: name,
-                club: club,
-                nation: nation,
-                position: position,
-                altPositions: [],
-                ovr: ovr,
-                stats: stats,
+                id, name, club, nation, position, altPositions: [], ovr, stats,
                 program: 'Base Card',
-                image: 'https://i.ibb.co/Y4j1BX6m/Mexico.png', // заглушка
+                image: 'https://i.ibb.co/Y4j1BX6m/Mexico.png',
                 trainingLevel: 0,
                 ovrUpgrade: 0,
-                stamina: 3 + Math.random() * 2, // 3.0-5.0
+                stamina: 3 + Math.random() * 2,
                 preferredFoot: Math.random() < 0.7 ? 'right' : 'left',
-                weakFoot: Math.floor(Math.random() * 5) + 1,
-                skill: Math.floor(Math.random() * 10) + 1, // финты 1-10? но в описании от 0.5 до 5, преобразуем
-                height: 170 + Math.floor(Math.random() * 30), // 170-200
-                weight: 65 + Math.floor(Math.random() * 30), // 65-95
+                weakFoot: Math.floor(Math.random()*5)+1,
+                skill: Math.floor(Math.random()*10)+1,
+                height: 170 + Math.floor(Math.random()*30),
+                weight: 65 + Math.floor(Math.random()*30),
                 league: 'International',
                 tradeable: isTradeable
             };
+        }
+
+        function createStarterPlayers() {
+            const players = [];
+            const starterPos = ['GK','LB','CB','CB','RB','CM','CM','CM','LW','ST','RW'];
+            const benchPos = ['GK','CB','LB','CDM','CAM','ST','LW'];
+            let id = 1;
+            starterPos.forEach(pos => players.push(createPlayer(id++, pos, false)));
+            benchPos.forEach(pos => players.push(createPlayer(id++, pos, false)));
+            return players;
         }
 
         /* ==================== СОСТОЯНИЕ ИГРЫ ==================== */
@@ -247,18 +218,16 @@
             constructor() {
                 this.load();
                 if (!this.data) {
-                    // Первый вход - нужна регистрация
                     this.registered = false;
                 } else {
                     this.registered = true;
+                    this.ensureDataIntegrity();
                 }
-                // Инициализация после регистрации
                 if (this.registered) {
                     this.initNewDayCheck();
                 }
             }
 
-            // Загрузка из localStorage
             load() {
                 const saved = localStorage.getItem(STORAGE_KEY);
                 if (saved) {
@@ -272,22 +241,55 @@
                 }
             }
 
-            // Сохранение
             save() {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
             }
 
-            // Регистрация нового пользователя
+            /* Добавление отсутствующих полей в загруженных данных */
+            ensureDataIntegrity() {
+                const d = this.data;
+                if (!d.lineup) d.lineup = [];
+                if (!d.bench) d.bench = [];
+                if (!d.reserves) d.reserves = [];
+                if (!d.players) d.players = [];
+                // Убедимся, что все валюты и числа существуют
+                const defaultValues = {
+                    sapphires: 0, offsideTokens: 0, ovrPoints: 0, divisionStars: 0,
+                    xp: 0, seasonPoints: 0, trainingPoints: 0, fragments: 0,
+                    coupons: 0, coins: 0, level: 1,
+                    battlePassFreeLevel: 1, battlePassGoldLevel: 1,
+                    battlePassGoldPurchased: false,
+                    matchesPlayed: 0, wins: 0, draws: 0, losses: 0,
+                    goalsScored: 0, goalsConceded: 0,
+                    dailyRewardDay: 1, questsCompletedToday: 0,
+                    lastResetDate: new Date().toLocaleDateString('ru-RU', {timeZone: 'Europe/Moscow'}),
+                    lastDailyRewardDate: new Date().toISOString().split('T')[0],
+                    formation: DEFAULT_FORMATION.name,
+                    profilePic: '', achievements: [], packsOpened: 0,
+                    currentDivision: 'Bronze III'
+                };
+                for (let key in defaultValues) {
+                    if (d[key] === undefined) d[key] = defaultValues[key];
+                }
+                if (!d.dailyQuests) d.dailyQuests = this.generateDailyQuests();
+                // Если captain и др. отсутствуют, назначим случайно
+                if (!d.captain && d.lineup.length) d.captain = d.lineup[0];
+                if (!d.penaltyTaker && d.lineup.length) d.penaltyTaker = d.lineup.find(id => {
+                    const p = d.players.find(p => p.id === id);
+                    return p && p.position === 'ST';
+                }) || d.lineup[0];
+                if (!d.freeKickTaker && d.lineup.length) d.freeKickTaker = d.lineup[0];
+                if (!d.cornerTaker && d.lineup.length) d.cornerTaker = d.lineup[0];
+            }
+
             register(nickname, clubName) {
                 const uid = generateUniqueId();
-                const now = new Date().toISOString();
                 const starterPlayers = createStarterPlayers();
                 this.data = {
                     userId: uid,
-                    nickname: nickname,
-                    clubName: clubName,
-                    createdAt: now,
-                    // Ресурсы (валюты)
+                    nickname,
+                    clubName,
+                    createdAt: new Date().toISOString(),
                     sapphires: 1500,
                     offsideTokens: 0,
                     ovrPoints: 500,
@@ -298,48 +300,30 @@
                     fragments: 500,
                     coupons: 10,
                     coins: 0,
-                    // Профиль
-                    profilePic: '', // будет возможность сменить
-                    // Состав
+                    profilePic: '',
                     formation: DEFAULT_FORMATION.name,
-                    lineup: starterPlayers.slice(0, 11).map(p => p.id),
-                    bench: starterPlayers.slice(11, 18).map(p => p.id),
-                    reserves: [], // остальные потом
-                    // Инвентарь всех карточек
+                    lineup: starterPlayers.slice(0,11).map(p => p.id),
+                    bench: starterPlayers.slice(11,18).map(p => p.id),
+                    reserves: [],
                     players: starterPlayers,
-                    // Выбранные роли
                     captain: starterPlayers[0].id,
                     penaltyTaker: starterPlayers[9].id, // ST
                     freeKickTaker: starterPlayers[9].id,
-                    cornerTaker: starterPlayers[6].id, // CM
-                    // Прогресс
+                    cornerTaker: starterPlayers[6].id,
                     level: 1,
-                    // Абонементы (бесплатный и золотой)
                     battlePassFreeLevel: 1,
-                    battlePassGoldLevel: 1, // если куплен
+                    battlePassGoldLevel: 1,
                     battlePassGoldPurchased: false,
-                    // Квесты
                     dailyQuests: this.generateDailyQuests(),
                     questsCompletedToday: 0,
-                    // Ежедневная награда
                     dailyRewardDay: 1,
                     lastDailyRewardDate: new Date().toISOString().split('T')[0],
-                    // Дата последнего сброса (00:00 МСК)
                     lastResetDate: new Date().toLocaleDateString('ru-RU', {timeZone: 'Europe/Moscow'}),
-                    // Дивизион
                     currentDivision: 'Bronze III',
-                    // Статистика матчей
-                    matchesPlayed: 0,
-                    wins: 0,
-                    draws: 0,
-                    losses: 0,
-                    goalsScored: 0,
-                    goalsConceded: 0,
-                    // Достижения (заглушка)
+                    matchesPlayed: 0, wins: 0, draws: 0, losses: 0,
+                    goalsScored: 0, goalsConceded: 0,
                     achievements: [],
-                    // Пакеты открыты (история)
                     packsOpened: 0,
-                    // Настройки
                     settings: {}
                 };
                 this.registered = true;
@@ -347,7 +331,6 @@
                 this.initNewDayCheck();
             }
 
-            // Генерация случайных 4 ежедневных квестов
             generateDailyQuests() {
                 const questPool = [
                     { desc: 'Забей 10 голов', goal: 10, progress: 0, reward: { xp: 20, seasonPoints: 75, sapphires: 100 } },
@@ -360,10 +343,9 @@
                     { desc: 'Забери ежедневную награду', goal: 1, progress: 0, reward: { xp: 20, seasonPoints: 75, sapphires: 50 } }
                 ];
                 const shuffled = questPool.sort(() => 0.5 - Math.random());
-                return shuffled.slice(0, 4).map(q => ({...q, progress: 0}));
+                return shuffled.slice(0,4).map(q => ({...q, progress: 0}));
             }
 
-            // Проверка наступления нового дня (МСК)
             initNewDayCheck() {
                 const checkReset = () => {
                     const mskDate = new Date().toLocaleDateString('ru-RU', {timeZone: 'Europe/Moscow'});
@@ -375,19 +357,16 @@
                     }
                 };
                 checkReset();
-                setInterval(checkReset, 60000); // раз в минуту
+                setInterval(checkReset, 60000);
             }
 
             dailyReset() {
-                // Сброс квестов
                 this.data.dailyQuests = this.generateDailyQuests();
                 this.data.questsCompletedToday = 0;
-                // Сброс ежедневной награды (если пропущен день - на день 1)
-                this.data.dailyRewardDay = 1; // упрощенно
+                this.data.dailyRewardDay = 1;
                 this.data.lastDailyRewardDate = new Date().toISOString().split('T')[0];
             }
 
-            // Получение текущего дивизиона по звездам
             getDivisionByStars(stars) {
                 for (let div of DIVISIONS) {
                     if (stars >= div.minStars && stars <= div.maxStars) return div;
@@ -413,12 +392,10 @@
             initDOM() {
                 this.app = document.getElementById('app');
                 this.app.innerHTML = '';
-                // Создаем верхнюю панель
                 this.topBar = document.createElement('div');
                 this.topBar.className = 'top-bar';
                 this.app.appendChild(this.topBar);
 
-                // Контейнер для экранов
                 this.screenContainer = document.createElement('div');
                 this.screenContainer.style.flex = '1';
                 this.screenContainer.style.overflow = 'auto';
@@ -426,15 +403,12 @@
                 this.app.appendChild(this.screenContainer);
             }
 
-            attachEvents() {
-                // будут динамически
-            }
+            attachEvents() {}
 
             refreshAll() {
                 this.renderTopBar();
                 if (this.currentScreen === 'menu') this.showMainMenu();
                 else if (this.currentScreen === 'profile') this.showProfile();
-                // и т.д.
             }
 
             renderTopBar() {
@@ -453,18 +427,19 @@
                         <div class="resource-item"><img class="resource-icon" src="${CURRENCIES.offsideTokens.icon}"> ${d.offsideTokens}</div>
                     </div>
                 `;
-                document.getElementById('profileBtn').addEventListener('click', () => this.showProfile());
+                const profileBtn = document.getElementById('profileBtn');
+                if (profileBtn) profileBtn.addEventListener('click', () => this.showProfile());
             }
 
             calcTeamOVR() {
                 const d = this.game.data;
+                if (!d || !Array.isArray(d.lineup) || !Array.isArray(d.players)) return 0;
                 const mainPlayers = d.lineup.map(id => d.players.find(p => p.id === id)).filter(Boolean);
                 if (mainPlayers.length === 0) return 0;
                 const avg = mainPlayers.reduce((sum, p) => sum + p.ovr, 0) / mainPlayers.length;
                 return Math.floor(avg);
             }
 
-            // Переключение экранов
             setScreen(content) {
                 this.screenContainer.innerHTML = '';
                 if (typeof content === 'string') {

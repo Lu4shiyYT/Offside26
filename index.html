@@ -6298,50 +6298,58 @@ const App = (() => {
 
   // ЗАМЕНИТЬ функцию init() на эту:
 function init() {
-  // Показать загрузку
   const loader = document.getElementById('screen-loading');
   const bar    = document.getElementById('loading-bar');
+  const pctEl  = document.getElementById('loading-pct');
 
   let progress = 0;
-  const interval = setInterval(() => {
-    progress += rand(8, 18);
-    if (bar) bar.style.width = Math.min(progress, 100) + '%';
 
-    if (progress >= 100) {
+  // Загрузка за 1-2 секунды (каждые 80мс добавляем 5-12%)
+  const interval = setInterval(() => {
+    progress += rand(5, 12);
+    const pct = Math.min(progress, 100);
+
+    if (bar)   bar.style.width    = pct + '%';
+    if (pctEl) pctEl.textContent  = Math.round(pct) + '%';
+
+    if (pct >= 100) {
       clearInterval(interval);
 
+      // Пауза 200мс потом скрыть загрузку
       setTimeout(() => {
-        // Скрыть загрузку
         if (loader) {
           loader.style.opacity = '0';
-          loader.style.transition = 'opacity 0.5s';
+
           setTimeout(() => {
             loader.style.display = 'none';
             loader.classList.remove('active');
-          }, 500);
+
+            // Теперь запускаем игру
+            const saved = loadState();
+
+            if (saved && state.registered) {
+              showScreen('main');
+              updateUI();
+              startSlider();
+              generateMarket();
+              checkDailyBonus();
+            } else {
+              const regScreen = document.getElementById('screen-register');
+              if (regScreen) regScreen.classList.add('active');
+            }
+
+            // Автосохранение
+            setInterval(saveState, 30000);
+
+            // Таймер лиги
+            updateLeagueTimer();
+            setInterval(updateLeagueTimer, 60000);
+
+          }, 500); // 500мс на анимацию исчезновения
         }
-
-        // Загрузить сохранение
-        const saved = loadState();
-
-        if (saved && state.registered) {
-          showScreen('main');
-          updateUI();
-          startSlider();
-          generateMarket();
-          checkDailyBonus();
-        } else {
-          document.getElementById('screen-register')?.classList.add('active');
-        }
-
-        // Автосохранение каждые 30 сек
-        setInterval(saveState, 30000);
-        updateLeagueTimer();
-        setInterval(updateLeagueTimer, 60000);
-
-      }, 300);
+      }, 200);
     }
-  }, 120);
+  }, 80); // каждые 80мс = примерно 1-1.5 секунды всего
 }
 
   function updateLeagueTimer() {
@@ -6364,6 +6372,7 @@ function init() {
 
   return {
     // Навигация
+    init,
     showScreen,
     goSlide,
 
@@ -6445,11 +6454,11 @@ function init() {
 // ----------------------------------------------------------
 //  ЗАПУСК
 // ----------------------------------------------------------
-document.addEventListener('DOMContentLoaded', () => App.init ? App.init() : null);
-// Fallback если DOM уже загружен
-if (document.readyState !== 'loading') {
-  if (typeof App !== 'undefined' && App.init) App.init();
-}
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof App !== 'undefined' && App.init) {
+    App.init();
+  }
+});
 </script>
 </body>
 </html>

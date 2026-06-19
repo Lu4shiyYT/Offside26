@@ -5778,4 +5778,651 @@ const App = (() => {
     const a = matchState.awayScore;
 
     let result, resultClass;
-    let coinsEarned = 0, xpEar
+    let coinsEarned = 0, xpEarned = 0, pointsEarned = 0;
+
+    if (h > a) {
+      result = 'ПОБЕДА'; resultClass = 'result-win';
+      coinsEarned  = rand(800, 2000);
+      xpEarned     = rand(150, 350);
+      pointsEarned = rand(20, 50);
+      state.wins++;
+      updateQuestProgress('match_win', 1);
+    } else if (h < a) {
+      result = 'ПОРАЖЕНИЕ'; resultClass = 'result-lose';
+      coinsEarned  = rand(200, 500);
+      xpEarned     = rand(50, 100);
+      pointsEarned = rand(5, 15);
+      state.losses++;
+    } else {
+      result = 'НИЧЬЯ'; resultClass = 'result-draw';
+      coinsEarned  = rand(400, 900);
+      xpEarned     = rand(80, 180);
+      pointsEarned = rand(10, 25);
+      state.draws++;
+    }
+
+    state.matchesPlayed++;
+    state.goals += h;
+
+    if (matchState.mode === 'ranked') {
+      state.leaguePoints += pointsEarned;
+    }
+
+    addCoins(coinsEarned);
+    addPoints(pointsEarned);
+    addXP(xpEarned);
+    updateQuestProgress('match_play', 1);
+
+    // Форма (последние 5)
+    const formResult = h > a ? 'w' : h < a ? 'l' : 'd';
+    if (!state.form) state.form = [];
+    state.form.push(formResult);
+    if (state.form.length > 5) state.form.shift();
+
+    saveState();
+    updateUI();
+    showMatchResult(result, resultClass, h, a, coinsEarned, xpEarned, pointsEarned);
+  }
+
+  function showMatchResult(result, cls, h, a, coins, xp, points) {
+    setText('result-title', result);
+    setText('result-score', `${h} : ${a}`);
+    setText('result-home',  state.nick);
+    setText('result-away',  'Соперник');
+
+    const titleEl = document.getElementById('result-title');
+    if (titleEl) {
+      titleEl.className = `result-title ${cls}`;
+    }
+
+    const rewardsGrid = document.getElementById('result-rewards-grid');
+    if (rewardsGrid) {
+      rewardsGrid.innerHTML = `
+        <div class="result-reward-item">
+          <div class="result-reward-icon">🪙</div>
+          <div class="result-reward-val">+${formatNum(coins)}</div>
+          <div class="result-reward-name">Монеты</div>
+        </div>
+        <div class="result-reward-item">
+          <div class="result-reward-icon">⭐</div>
+          <div class="result-reward-val">+${formatNum(xp)}</div>
+          <div class="result-reward-name">Опыт</div>
+        </div>
+        <div class="result-reward-item">
+          <div class="result-reward-icon">💎</div>
+          <div class="result-reward-val">+${formatNum(points)}</div>
+          <div class="result-reward-name">Очки</div>
+        </div>`;
+    }
+
+    // XP прогресс бар
+    const xpPct = Math.min(100, Math.round((state.xp / xpForLevel(state.level)) * 100));
+    setText('result-xp-label-val', `+${xp} XP`);
+    setStyle('result-xp-bar', 'width', '0%');
+    setTimeout(() => setStyle('result-xp-bar', 'width', `${xpPct}%`), 300);
+
+    if (result === 'ПОБЕДА') spawnConfetti();
+
+    showScreen('match-result');
+  }
+
+  function playAgain() {
+    startMatch(matchState.mode);
+  }
+
+  // ----------------------------------------------------------
+  //  ОБМЕН СОСТАВОВ (SBC)
+  // ----------------------------------------------------------
+
+  function renderExchange() {
+    const list = document.getElementById('exchange-list');
+    if (!list) return;
+
+    list.innerHTML = SBC_DATA.map(sbc => {
+      const diffColors = { easy:'#00c864', medium:'#ff9900', hard:'#e91e8c' };
+      const diffNames  = { easy:'Лёгкий', medium:'Средний', hard:'Сложный' };
+      const diffColor  = diffColors[sbc.difficulty] || '#aaa';
+
+      const reqHTML = sbc.requirements.map(r => `
+        <div class="sbc-req-item">
+          <span class="sbc-req-label">${r.label}</span>
+          <span class="sbc-req-val">${r.value}</span>
+        </div>`).join('');
+
+      const rewHTML = sbc.rewards.map(r => `
+        <div class="sbc-reward-chip">
+          <span>${r.icon}</span>
+          <span>${r.label}</span>
+        </div>`).join('');
+
+      return `
+        <div class="sbc-card animate-slide-up">
+          <div class="sbc-card-header">
+            <div class="sbc-icon">${sbc.icon}</div>
+            <div class="sbc-header-info">
+              <div class="sbc-name">${sbc.name}</div>
+              <div class="sbc-diff-badge" style="color:${diffColor};border-color:${diffColor}">
+                ${diffNames[sbc.difficulty] || sbc.difficulty}
+              </div>
+            </div>
+          </div>
+          <div class="sbc-desc">${sbc.desc}</div>
+          <div class="sbc-requirements">${reqHTML}</div>
+          <div class="sbc-rewards-row">
+            <div class="sbc-rewards-label">Награды:</div>
+            <div class="sbc-rewards-chips">${rewHTML}</div>
+          </div>
+          <button class="btn-sbc-submit"
+                  onclick="App.submitSBC('${sbc.id}')">
+            Отправить состав
+          </button>
+        </div>`;
+    }).join('');
+  }
+
+  function submitSBC(id) {
+    const sbc = SBC_DATA.find(s => s.id === id);
+    if (!sbc) return;
+
+    const myOvr = calcOvr(state.squad);
+    const req   = sbc.requirements.find(r => r.label === 'OVR мин.');
+    const minOvr = req ? parseInt(req.value) : 0;
+
+    if (myOvr < minOvr) {
+      showToast(`❌ OVR вашей команды (${myOvr}) ниже требуемого (${minOvr})`, 'error');
+      return;
+    }
+
+    openModal(`Подтвердить: ${sbc.name}`, `
+      <div style="text-align:center;padding:10px 0">
+        <div style="font-size:40px;margin-bottom:10px">${sbc.icon}</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px">${sbc.name}</div>
+        <div style="color:var(--text-muted);margin-bottom:16px">${sbc.desc}</div>
+        <div style="color:var(--accent-green);font-size:14px;margin-bottom:16px">
+          ✅ Ваш OVR ${myOvr} соответствует требованиям
+        </div>
+        <div class="sbc-rewards-chips" style="justify-content:center;margin-bottom:16px">
+          ${sbc.rewards.map(r => `
+            <div class="sbc-reward-chip">
+              <span>${r.icon}</span><span>${r.label}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div class="confirm-btns">
+        <button class="btn-confirm-cancel" onclick="App.closeModal()">Отмена</button>
+        <button class="btn-confirm-ok" onclick="App.confirmSBC('${id}')">Подтвердить ✓</button>
+      </div>
+    `);
+  }
+
+  function confirmSBC(id) {
+    const sbc = SBC_DATA.find(s => s.id === id);
+    if (!sbc) return;
+
+    closeModal();
+
+    // Выдать награды
+    sbc.rewards.forEach(r => {
+      if (r.label.includes('пак') || r.label.includes('Пак')) {
+        const packId = r.label.toLowerCase().includes('золот') ? 'pack_gold'
+                     : r.label.toLowerCase().includes('серебр') ? 'pack_silver'
+                     : r.label.toLowerCase().includes('элит') ? 'pack_elite'
+                     : r.label.toLowerCase().includes('икон') ? 'pack_icon'
+                     : 'pack_bronze';
+        const pack = STORE_ITEMS.find(i => i.id === packId);
+        if (pack) setTimeout(() => openPackOpening(pack), 500);
+      }
+      if (r.label.includes('монет') || r.label.match(/[\d,]+/)) {
+        const match = r.label.match(/[\d,]+/);
+        if (match) addCoins(parseInt(match[0].replace(',','')));
+      }
+      if (r.label.includes('крист')) {
+        const match = r.label.match(/\d+/);
+        if (match) addGems(parseInt(match[0]));
+      }
+    });
+
+    showToast(`🎉 SBC выполнен: ${sbc.name}!`, 'success');
+    spawnConfetti();
+  }
+
+  // ----------------------------------------------------------
+  //  STAR PASS
+  // ----------------------------------------------------------
+
+  const STAR_PASS_REWARDS = Array.from({ length: 30 }, (_, i) => {
+    const lvl = i + 1;
+    const isBig = lvl % 5 === 0;
+    return {
+      level: lvl,
+      free: isBig
+        ? { icon:'📦', label: lvl % 10 === 0 ? 'Золотой пак' : 'Серебряный пак' }
+        : { icon:'🪙', label: `${formatNum(lvl * 300)} монет` },
+      premium: isBig
+        ? { icon: lvl % 10 === 0 ? '💎' : '📦',
+            label: lvl % 10 === 0 ? 'Элитный пак' : 'Золотой пак x2' }
+        : { icon: lvl % 3 === 0 ? '🔮' : '🪙',
+            label: lvl % 3 === 0 ? `${lvl * 5} кристаллов` : `${formatNum(lvl * 600)} монет` },
+    };
+  });
+
+  function renderStarPass() {
+    const pct = Math.round((state.starPassLevel / 30) * 100);
+    setStyle('sp-progress-bar', 'width', `${pct}%`);
+    setText('sp-progress-text', `Уровень ${state.starPassLevel} / 30`);
+
+    const container = document.getElementById('starpass-rewards');
+    if (!container) return;
+
+    container.innerHTML = STAR_PASS_REWARDS.map(r => {
+      const unlocked = state.starPassLevel >= r.level;
+      const claimed  = state.claimedSPRewards.includes(r.level);
+      const canFree  = unlocked && !claimed;
+      const canPrem  = unlocked && state.starPassPremium && !claimed;
+
+      return `
+        <div class="sp-reward-row ${unlocked ? 'unlocked' : 'locked'} ${claimed ? 'claimed' : ''}">
+          <div class="sp-level-badge">Ур.${r.level}</div>
+
+          <!-- Бесплатная награда -->
+          <div class="sp-reward-cell free ${canFree ? 'available' : ''}">
+            <div class="sp-reward-icon">${r.free.icon}</div>
+            <div class="sp-reward-label">${r.free.label}</div>
+            ${canFree ? `<button class="btn-sp-claim"
+                onclick="App.claimSPReward(${r.level},'free')">
+                Забрать</button>` : ''}
+            ${claimed ? '<div class="sp-claimed-check">✓</div>' : ''}
+            ${!unlocked ? '<div class="sp-lock">🔒</div>' : ''}
+          </div>
+
+          <!-- Премиум награда -->
+          <div class="sp-reward-cell premium ${state.starPassPremium ? '' : 'locked-prem'}
+               ${canPrem ? 'available' : ''}">
+            <div class="sp-reward-icon">${r.premium.icon}</div>
+            <div class="sp-reward-label">${r.premium.label}</div>
+            ${canPrem ? `<button class="btn-sp-claim premium"
+                onclick="App.claimSPReward(${r.level},'premium')">
+                Забрать</button>` : ''}
+            ${!state.starPassPremium ? '<div class="sp-lock">⭐</div>' : ''}
+            ${claimed && state.starPassPremium ? '<div class="sp-claimed-check">✓</div>' : ''}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function claimSPReward(level, type) {
+    if (state.claimedSPRewards.includes(level)) {
+      showToast('Уже получено', 'warning'); return;
+    }
+    if (state.starPassLevel < level) {
+      showToast('Уровень не достигнут', 'error'); return;
+    }
+    if (type === 'premium' && !state.starPassPremium) {
+      showToast('Нужен Star Pass Premium', 'warning'); return;
+    }
+
+    const reward = STAR_PASS_REWARDS[level - 1];
+    const r = type === 'premium' ? reward.premium : reward.free;
+
+    if (r.label.includes('монет')) {
+      const match = r.label.replace(/\s/g,'').match(/[\d.]+[КМ]?/);
+      if (match) {
+        let val = parseFloat(match[0]);
+        if (match[0].includes('К')) val *= 1000;
+        if (match[0].includes('М')) val *= 1000000;
+        addCoins(Math.round(val));
+      }
+    } else if (r.label.includes('кристалл')) {
+      const match = r.label.match(/\d+/);
+      if (match) addGems(parseInt(match[0]));
+    } else if (r.label.toLowerCase().includes('пак')) {
+      const packId = r.label.toLowerCase().includes('элит') ? 'pack_elite'
+                   : r.label.toLowerCase().includes('золот') ? 'pack_gold'
+                   : r.label.toLowerCase().includes('серебр') ? 'pack_silver'
+                   : 'pack_bronze';
+      const pack = STORE_ITEMS.find(i => i.id === packId);
+      if (pack) setTimeout(() => openPackOpening(pack), 300);
+    }
+
+    state.claimedSPRewards.push(level);
+    saveState();
+    renderStarPass();
+    showToast(`🎁 Награда ${level} уровня получена!`, 'success');
+  }
+
+  function upgradeStarPass() {
+    if (state.starPassPremium) {
+      showToast('У вас уже есть Star Pass Premium!', 'info'); return;
+    }
+    openModal('Star Pass Premium', `
+      <div style="text-align:center;padding:10px 0">
+        <div style="font-size:48px;margin-bottom:12px">⭐</div>
+        <div style="font-size:18px;font-weight:700;margin-bottom:8px">
+          Star Pass Premium
+        </div>
+        <div style="color:var(--text-muted);margin-bottom:20px;line-height:1.6">
+          Разблокируйте все премиум награды сезона!<br>
+          • Эксклюзивные паки игроков<br>
+          • Дополнительные кристаллы каждый уровень<br>
+          • Специальные косметические предметы
+        </div>
+        <div style="font-size:22px;font-weight:700;color:var(--accent-gold);margin-bottom:20px">
+          199 ₽ / сезон
+        </div>
+      </div>
+      <div class="confirm-btns">
+        <button class="btn-confirm-cancel" onclick="App.closeModal()">Позже</button>
+        <button class="btn-confirm-ok" onclick="App.confirmUpgradeSP()">Купить ⭐</button>
+      </div>
+    `);
+  }
+
+  function confirmUpgradeSP() {
+    state.starPassPremium = true;
+    saveState();
+    closeModal();
+    renderStarPass();
+    showToast('⭐ Star Pass Premium активирован!', 'success');
+    spawnConfetti();
+  }
+
+  // ----------------------------------------------------------
+  //  ТУРНИР
+  // ----------------------------------------------------------
+
+  function renderTournament() {
+    const rounds = document.getElementById('bracket-rounds');
+    if (!rounds) return;
+
+    const teams = [
+      { name: state.nick,    ovr: calcOvr(state.squad), isPlayer: true  },
+      { name: 'FC Galaxy',   ovr: rand(70,85), isPlayer: false },
+      { name: 'Red Lions',   ovr: rand(70,85), isPlayer: false },
+      { name: 'Blue Eagles', ovr: rand(70,85), isPlayer: false },
+      { name: 'Storm FC',    ovr: rand(70,85), isPlayer: false },
+      { name: 'Iron Bulls',  ovr: rand(70,85), isPlayer: false },
+      { name: 'Night Wolves',ovr: rand(70,85), isPlayer: false },
+      { name: 'Solar FC',    ovr: rand(70,85), isPlayer: false },
+    ];
+
+    const roundNames = ['1/4 финала', 'Полуфинал', 'Финал'];
+    const roundsData = [
+      [ [0,1],[2,3],[4,5],[6,7] ],
+      [ [0,1],[2,3] ],
+      [ [0,1] ],
+    ];
+
+    rounds.innerHTML = roundNames.map((rName, ri) => `
+      <div class="bracket-round">
+        <div class="bracket-round-title">${rName}</div>
+        <div class="bracket-matches">
+          ${roundsData[ri].map(pair => {
+            const t1 = teams[pair[0]] || { name:'TBD', ovr:0 };
+            const t2 = teams[pair[1]] || { name:'TBD', ovr:0 };
+            return `
+              <div class="bracket-match">
+                <div class="bracket-team ${t1.isPlayer ? 'is-player' : ''}">
+                  <span class="bt-name">${t1.name}</span>
+                  <span class="bt-ovr">${t1.ovr}</span>
+                </div>
+                <div class="bracket-vs">VS</div>
+                <div class="bracket-team ${t2.isPlayer ? 'is-player' : ''}">
+                  <span class="bt-name">${t2.name}</span>
+                  <span class="bt-ovr">${t2.ovr}</span>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>`).join('');
+  }
+
+  // ----------------------------------------------------------
+  //  НАСТРОЙКИ
+  // ----------------------------------------------------------
+
+  function renderSettings() {
+    const s = state.settings;
+    const updateToggle = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) { el.classList.toggle('on', val); el.classList.toggle('off', !val); }
+    };
+    updateToggle('toggle-sound',  s.sound);
+    updateToggle('toggle-vibro',  s.vibro);
+    updateToggle('toggle-notify', s.notify);
+    setText('settings-nick-desc', state.nick);
+  }
+
+  function toggleSetting(key) {
+    state.settings[key] = !state.settings[key];
+    saveState();
+    renderSettings();
+    showToast(
+      `${key === 'sound' ? '🔊' : key === 'vibro' ? '📳' : '🔔'}
+       ${state.settings[key] ? 'Включено' : 'Выключено'}`,
+      'info'
+    );
+  }
+
+  function resetGame() {
+    openModal('Сбросить прогресс', `
+      <div style="text-align:center;padding:10px 0">
+        <div style="font-size:40px;margin-bottom:12px">⚠️</div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:8px;color:#ff4444">
+          Вы уверены?
+        </div>
+        <div style="color:var(--text-muted);margin-bottom:20px">
+          Весь прогресс будет удалён безвозвратно!
+        </div>
+      </div>
+      <div class="confirm-btns">
+        <button class="btn-confirm-cancel" onclick="App.closeModal()">Отмена</button>
+        <button class="btn-confirm-ok" style="background:#ff4444"
+                onclick="App.confirmReset()">
+          Сбросить 🗑️
+        </button>
+      </div>
+    `);
+  }
+
+  function confirmReset() {
+    localStorage.removeItem('offside26_save');
+    closeModal();
+    location.reload();
+  }
+
+  // ----------------------------------------------------------
+  //  ДОСТИЖЕНИЯ
+  // ----------------------------------------------------------
+
+  function checkAchievements() {
+    ACHIEVEMENTS_DATA.forEach(a => {
+      if (!state.achievements.includes(a.id) && a.condition(state)) {
+        state.achievements.push(a.id);
+        saveState();
+        showToast(`🏅 Достижение: ${a.name}!`, 'success');
+      }
+    });
+  }
+
+  // ----------------------------------------------------------
+  //  ЕЖЕДНЕВНЫЙ БОНУС
+  // ----------------------------------------------------------
+
+  function checkDailyBonus() {
+    const today = new Date().toDateString();
+    if (state.lastLogin === today) return;
+    state.lastLogin = today;
+
+    const bonus = { coins: 1000, xp: 200 };
+    addCoins(bonus.coins);
+    addXP(bonus.xp);
+    saveState();
+
+    setTimeout(() => {
+      openModal('🎁 Ежедневный бонус!', `
+        <div style="text-align:center;padding:16px 0">
+          <div style="font-size:48px;margin-bottom:12px">🎁</div>
+          <div style="font-size:18px;font-weight:700;margin-bottom:8px">
+            Добро пожаловать обратно!
+          </div>
+          <div style="margin-bottom:20px;color:var(--text-muted)">
+            Вы получаете ежедневный бонус за вход:
+          </div>
+          <div style="display:flex;justify-content:center;gap:24px;margin-bottom:20px">
+            <div style="text-align:center">
+              <div style="font-size:28px">🪙</div>
+              <div style="font-size:20px;font-weight:700;color:var(--accent-gold)">
+                +${formatNum(bonus.coins)}
+              </div>
+              <div style="color:var(--text-muted);font-size:12px">Монеты</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:28px">⭐</div>
+              <div style="font-size:20px;font-weight:700;color:var(--accent-blue)">
+                +${bonus.xp}
+              </div>
+              <div style="color:var(--text-muted);font-size:12px">Опыт</div>
+            </div>
+          </div>
+          <button class="btn-primary" onclick="App.closeModal()">
+            Забрать! 🎉
+          </button>
+        </div>
+      `);
+    }, 1000);
+  }
+
+  // ----------------------------------------------------------
+  //  ИНИЦИАЛИЗАЦИЯ
+  // ----------------------------------------------------------
+
+  function init() {
+    const saved = loadState();
+
+    if (saved && state.registered) {
+      showScreen('main');
+      updateUI();
+      startSlider();
+      generateMarket();
+      checkDailyBonus();
+    } else {
+      document.getElementById('screen-register').classList.add('active');
+    }
+
+    // Автосохранение каждые 30 сек
+    setInterval(saveState, 30000);
+
+    // Таймер лиги
+    updateLeagueTimer();
+    setInterval(updateLeagueTimer, 60000);
+  }
+
+  function updateLeagueTimer() {
+    const el = document.getElementById('league-timer');
+    if (!el) return;
+    const now     = new Date();
+    const endOfSeason = new Date();
+    endOfSeason.setDate(endOfSeason.getDate() + 14);
+    endOfSeason.setHours(0, 0, 0, 0);
+    const diff    = endOfSeason - now;
+    const days    = Math.floor(diff / 86400000);
+    const hours   = Math.floor((diff % 86400000) / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    el.textContent = `${days}д ${String(hours).padStart(2,'0')}:${String(minutes).padStart(2,'0')}`;
+  }
+
+  // ----------------------------------------------------------
+  //  ПУБЛИЧНОЕ API
+  // ----------------------------------------------------------
+
+  return {
+    // Навигация
+    showScreen,
+    goSlide,
+
+    // Регистрация
+    regStep1,
+    regStep2,
+    finishRegister,
+
+    // Профиль
+    renderProfile,
+    editNick,
+    saveNick,
+
+    // Состав
+    renderSquad,
+    squadTab,
+    setFormation,
+    fieldSlotClick,
+    assignToSlot,
+    addToSquad,
+    removeFromSquad,
+    moveToSquad,
+
+    // Рынок
+    filterMarket,
+    setMarketFilter,
+    toggleMarketFilters,
+    buyFromMarket,
+    confirmMarketBuy,
+    openPlayerDetail,
+
+    // Квесты
+    questTab,
+    claimQuest,
+
+    // Лиги
+    enterLeague,
+
+    // Магазин
+    storeCategory,
+    buyStoreItem,
+    confirmBuyPack,
+    showStore,
+
+    // Пак
+    revealPackCard,
+    nextPackCard,
+    finishPackOpen,
+
+    // Матч
+    startMatch,
+    skipMatch,
+    togglePause,
+    playAgain,
+
+    // SBC
+    submitSBC,
+    confirmSBC,
+
+    // Star Pass
+    claimSPReward,
+    upgradeStarPass,
+    confirmUpgradeSP,
+
+    // Настройки
+    toggleSetting,
+    resetGame,
+    confirmReset,
+
+    // Модалка
+    closeModal,
+
+    // Toast (для inline onclick)
+    showToast,
+  };
+
+})();
+
+// ----------------------------------------------------------
+//  ЗАПУСК
+// ----------------------------------------------------------
+document.addEventListener('DOMContentLoaded', () => App.init ? App.init() : null);
+// Fallback если DOM уже загружен
+if (document.readyState !== 'loading') {
+  if (typeof App !== 'undefined' && App.init) App.init();
+}
+</script>
+</body>
+</html>

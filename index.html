@@ -559,7 +559,7 @@ body {
       onclick="if(gameState.registered){openProfileModal();}else{promptRegister();}" />
     <div class="header-info" style="cursor:pointer;" onclick="if(gameState.registered){openProfileModal();}else{promptRegister();}">
         <div class="header-name" id="header-nickname-el">Тренер</div>
-        <div class="header-status" id="header-xp-el" style="color:#7d8e9e;font-size:11px;">XP 0 · Ур. 0</div>
+        <div class="header-status" id="header-xp-el" style="color:#7d8e9e;font-size:11px;">XP 0 • Ур. 0</div>
       </div>
       <button onclick="if(gameState.registered){handleNavQuests();}else{promptRegister();}" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:#f0c040;padding:5px 10px;cursor:pointer;font-size:11px;flex-shrink:0;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:1px;">
         <span style="font-size:18px;">🏅</span>
@@ -680,7 +680,7 @@ function updateHeaderResources() {
   document.getElementById('hdr-level').textContent = level;
 
   const xpEl = document.getElementById('header-xp-el');
-  if (xpEl) xpEl.textContent = `${fmtNum(xpInLvl)}/${XP_PER_LEVEL} XP · Ур. ${level}`;
+  if (xpEl) xpEl.textContent = `${fmtNum(xpInLvl)}/${XP_PER_LEVEL} XP • Ур. ${level}`;
 
   const nickEl = document.getElementById('header-nickname-el');
   if (nickEl && gameState.nickname) nickEl.textContent = gameState.nickname;
@@ -1557,6 +1557,88 @@ function showMarketToast(msg) {
   }, 2500);
 }
 
+function reopenPlayerDetailModal(playerId, context) {
+  const player = allPlayers.find(p => p.id === playerId);
+  if (!player) return;
+  const old = document.getElementById('player-detail-modal');
+  if (old) old.remove();
+  openPlayerDetailModal(player, context);
+}
+
+function handleMarketQtyInput(event, playerId) {
+  const input = event.target;
+  let val = input.value;
+
+  // Убираем ведущие нули (01 → 1)
+  if (val.length >= 2 && val.startsWith('0')) {
+    val = val.replace(/^0+/, '') || '0';
+    const pos = input.selectionStart - (input.value.length - val.length);
+    input.value = val;
+    input.setSelectionRange(pos, pos);
+  }
+
+  // Если больше 100 — ставим 100
+  const n = parseInt(val);
+  if (!isNaN(n) && n > 100) {
+    input.value = '100';
+    input.setSelectionRange(3, 3);
+    marketState.qty = 100;
+    updateMarketModalBottom(playerId);
+    return;
+  }
+
+  if (val === '' || val === '0' || isNaN(n)) {
+    marketState.qty = 1;
+    updateMarketModalBottom(playerId);
+    return;
+  }
+
+  marketState.qty = n;
+  updateMarketModalBottom(playerId);
+}
+
+function handleMarketQtyKey(event, playerId) {
+  const input = event.target;
+  const val = input.value;
+
+  if (event.key === 'Backspace' && val.length === 1) {
+    event.preventDefault();
+    input.value = '0';
+    marketState.qty = 1;
+    updateMarketModalBottom(playerId);
+  }
+}
+
+function updateMarketModalBottom(playerId) {
+  const player = allPlayers.find(p => p.id === playerId);
+  if (!player) return;
+
+  const price = getPlayerMarketPrice(player);
+  const total = price * marketState.qty;
+  const canBuy = (gameState.coins || 0) >= total;
+
+  // Обновляем итого
+  const totalEl = document.getElementById('market-modal-total');
+  if (totalEl) {
+    if (marketState.qty > 1) {
+      totalEl.innerHTML = `Итого: <img src="https://i.ibb.co/JRnypxvR/image.png" style="width:12px;height:12px;vertical-align:middle;"/> ${formatCoins(total)}`;
+      totalEl.style.display = 'block';
+    } else {
+      totalEl.style.display = 'none';
+    }
+  }
+
+  // Обновляем кнопку
+  const btn = document.getElementById('market-modal-buy-btn');
+  if (btn) {
+    btn.disabled = !canBuy;
+    btn.style.background = canBuy ? 'linear-gradient(135deg,#4dc05a,#38a046)' : 'rgba(255,255,255,0.08)';
+    btn.style.color = canBuy ? '#fff' : '#7d8e9e';
+    btn.style.cursor = canBuy ? 'pointer' : 'not-allowed';
+    btn.textContent = canBuy ? 'КУПИТЬ' : 'Недостаточно монет';
+  }
+}
+
 function openPlayerDetailModal(player, context) {
   const old = document.getElementById('player-detail-modal');
   if (old) old.remove();
@@ -1589,32 +1671,41 @@ function openPlayerDetailModal(player, context) {
   const fragVal = getFragmentReward(player.ovr||0);
   let actionBtns = '';
 
-  if (context === 'market') {
+if (context === 'market') {
     const price = getPlayerMarketPrice(player);
-    const canBuy = (gameState.coins||0) >= price;
+    const total = price * marketState.qty;
+    const canBuy = (gameState.coins||0) >= total;
     actionBtns = `
       <div style="margin-top:12px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <span style="font-size:12px;color:#7d8e9e;">Цена:</span>
+          <span style="font-size:12px;color:#7d8e9e;">Цена за 1:</span>
           <span style="font-size:15px;font-weight:700;color:#f0c040;display:flex;align-items:center;gap:4px;">
             <img src="https://i.ibb.co/JRnypxvR/image.png" style="width:14px;height:14px;"/> ${formatCoins(price)}
           </span>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;justify-content:center;margin-bottom:8px;">
-          <button onclick="changeMarketQty(-1);updateMarketModalQty()" class="market-qty-btn">−</button>
-          <span id="modal-qty-display" style="font-size:16px;font-weight:700;min-width:30px;text-align:center;">${marketState.qty}</span>
-          <button onclick="changeMarketQty(1);updateMarketModalQty()" class="market-qty-btn">+</button>
+        <div style="display:flex;align-items:center;gap:8px;justify-content:center;margin-bottom:4px;">
+          <button onclick="changeMarketQty(-1);reopenPlayerDetailModal(${player.id},'market')" class="market-qty-btn">−</button>
+          <input 
+            type="text" 
+            inputmode="numeric"
+            id="market-qty-input"
+            value="${marketState.qty}"
+            oninput="handleMarketQtyInput(event,${player.id})"
+            onkeydown="handleMarketQtyKey(event,${player.id})"
+            style="width:60px;height:36px;text-align:center;background:rgba(255,255,255,0.06);border:1px solid #1e2d3d;border-radius:8px;color:#fff;font-size:16px;font-weight:700;font-family:inherit;outline:none;"
+          />
+          <button onclick="changeMarketQty(1);reopenPlayerDetailModal(${player.id},'market')" class="market-qty-btn">+</button>
         </div>
-        <button onclick="buyFromMarket(${player.id});document.getElementById('player-detail-modal').remove();"
-          ${canBuy?'':'disabled'}
-          style="width:100%;padding:12px;background:${canBuy?'linear-gradient(135deg,#4dc05a,#38a046)':'rgba(255,255,255,0.08)'};
-            border:none;border-radius:10px;color:${canBuy?'#fff':'#7d8e9e'};font-size:14px;font-weight:700;
-            cursor:${canBuy?'pointer':'not-allowed'};font-family:inherit;">
-          ${canBuy?'КУПИТЬ':'Недостаточно монет'}
-        </button>
+        ${marketState.qty > 1 ? `<div id="market-modal-total" style="text-align:center;font-size:13px;color:#f0c040;margin-bottom:8px;">Итого: <img src="https://i.ibb.co/JRnypxvR/image.png" style="width:12px;height:12px;vertical-align:middle;"/> ${formatCoins(total)}</div>` : '<div id="market-modal-total" style="display:none;margin-bottom:8px;"></div>'}
+      <button id="market-modal-buy-btn" onclick="buyFromMarket(${player.id});document.getElementById('player-detail-modal').remove();"
+        ${canBuy?'':'disabled'}
+        style="width:100%;padding:12px;background:${canBuy?'linear-gradient(135deg,#4dc05a,#38a046)':'rgba(255,255,255,0.08)'};
+          border:none;border-radius:10px;color:${canBuy?'#fff':'#7d8e9e'};font-size:14px;font-weight:700;
+          cursor:${canBuy?'pointer':'not-allowed'};font-family:inherit;">
+        ${canBuy?'КУПИТЬ':'Недостаточно монет'}
+      </button>
       </div>`;
-
-  } else if (context === 'market_my') {
+} else if (context === 'market_my') {
     const price = getPlayerMarketPrice(player);
     const sellPrice = Math.floor(price * 0.85);
     actionBtns = `
@@ -1686,7 +1777,7 @@ function openPlayerDetailModal(player, context) {
           <!-- Левая колонка: тренировка -->
           <div style="background:rgba(77,192,90,0.08);border:1px solid rgba(77,192,90,${atMax?'0.15':'0.3'});border-radius:10px;padding:9px;display:flex;flex-direction:column;gap:6px;">
             <div style="font-size:10px;color:#7d8e9e;font-weight:600;">🏋️ Тренировка</div>
-            <div style="font-size:9px;color:#7d8e9e;">Ур. ${player.trainingLevel||0} / ${MAX_TRAINING_LEVEL} · ${TRAINING_COST_PER_LEVEL} оч/ур</div>
+            <div style="font-size:9px;color:#7d8e9e;">Ур. ${player.trainingLevel||0} / ${MAX_TRAINING_LEVEL} • ${TRAINING_COST_PER_LEVEL} оч/ур</div>
 
             <!-- +/- и поле ввода — только если не макс. уровень -->
             ${!atMax ? `
@@ -1720,7 +1811,7 @@ function openPlayerDetailModal(player, context) {
           <!-- Правая колонка: OVR апгрейд -->
           <div style="background:rgba(240,192,64,0.08);border:1px solid rgba(240,192,64,${canUpgradeOvr?'0.3':'0.15'});border-radius:10px;padding:9px;display:flex;flex-direction:column;gap:6px;">
             <div style="font-size:10px;color:#7d8e9e;font-weight:600;">⬆️ OVR апгрейд</div>
-            <div style="font-size:9px;color:#7d8e9e;">+${player.ovrUpgrade||0} / 5 · стоимость</div>
+            <div style="font-size:9px;color:#7d8e9e;">+${player.ovrUpgrade||0} / 5 • стоимость</div>
             <div style="font-size:13px;font-weight:700;color:#f0c040;text-align:center;padding:4px 0;">
               ${(player.ovrUpgrade||0) >= 5 ? '✓ Макс.' : nextOvrCost + ' оч.'}
             </div>
@@ -1864,9 +1955,24 @@ function trainPlayerFromModal(cardId) {
   gameState.myPlayers[idx].trainingLevel = (gameState.myPlayers[idx].trainingLevel||0) + 1;
   saveState(); updateHeaderResources();
   showMarketToast(`✅ Тренировка: +${gameState.myPlayers[idx].trainingLevel}`);
-  // Перерисовываем модал с обновлёнными данными
-  document.getElementById('player-detail-modal').remove();
+
+  // Запоминаем скролл
+  const modal = document.getElementById('player-detail-modal');
+  const innerBox = modal ? modal.querySelector('div') : null;
+  const savedScroll = innerBox ? innerBox.scrollTop : 0;
+
+  if (modal) modal.remove();
+  renderInventoryList();
   openPlayerDetailModal(gameState.myPlayers[idx], 'inventory');
+
+  // Восстанавливаем скролл
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const newModal = document.getElementById('player-detail-modal');
+      const newBox = newModal ? newModal.querySelector('div') : null;
+      if (newBox) newBox.scrollTop = savedScroll;
+    });
+  });
 }
 
 function upgradeOvrFromModal(cardId) {
@@ -1880,8 +1986,24 @@ function upgradeOvrFromModal(cardId) {
   gameState.myPlayers[idx].ovrUpgrade = (gameState.myPlayers[idx].ovrUpgrade||0) + 1;
   saveState(); updateHeaderResources();
   showMarketToast(`✅ OVR апгрейд: +${gameState.myPlayers[idx].ovrUpgrade}`);
-  document.getElementById('player-detail-modal').remove();
+
+  // Запоминаем скролл
+  const modal = document.getElementById('player-detail-modal');
+  const innerBox = modal ? modal.querySelector('div') : null;
+  const savedScroll = innerBox ? innerBox.scrollTop : 0;
+
+  if (modal) modal.remove();
+  renderInventoryList();
   openPlayerDetailModal(gameState.myPlayers[idx], 'inventory');
+
+  // Восстанавливаем скролл
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const newModal = document.getElementById('player-detail-modal');
+      const newBox = newModal ? newModal.querySelector('div') : null;
+      if (newBox) newBox.scrollTop = savedScroll;
+    });
+  });
 }
   
 function openMarketModal() {
@@ -2136,6 +2258,21 @@ function marketSelectAndDetail(cardId, playerId, context) {
 
   if (player) openPlayerDetailModal(player, context);
 
+  // Когда модал закроется — обновить грид
+  const _checkUpdate = setInterval(() => {
+    if (!document.getElementById('player-detail-modal')) {
+      clearInterval(_checkUpdate);
+      // Сохраняем скролл грида перед обновлением
+      const gridEl = document.getElementById('market-grid-container');
+      const savedScroll = gridEl ? gridEl.scrollTop : 0;
+      renderMarketModal();
+      setTimeout(() => {
+        const g = document.getElementById('market-grid-container');
+        if (g) g.scrollTop = savedScroll;
+      }, 0);
+    }
+  }, 300);
+
   // Восстанавливаем скролл грида
   setTimeout(() => {
     const g = document.getElementById('market-grid-container');
@@ -2250,12 +2387,9 @@ const isPartiallyInSquad = countInSquad > 0 && availableToSell > 0 && !thisCardI
     </div>
 
     <div style="display:flex;align-items:center;gap:8px;justify-content:center;margin-bottom:4px;">
-      <button class="market-qty-btn" onclick="changeMarketQty(-1)">−</button>
-      <input type="number" min="1" max="100" value="${marketState.qty}"
-        onchange="setMarketQtyDirect(this.value)"
-        oninput="setMarketQtyDirect(this.value)"
-        style="width:46px;height:32px;background:#0e1621;border:1px solid #1e2d3d;border-radius:8px;color:#fff;font-size:15px;font-weight:700;text-align:center;font-family:inherit;outline:none;" />
-      <button class="market-qty-btn" onclick="changeMarketQty(1)">+</button>
+      <button onclick="changeMarketQty(-1);reopenPlayerDetailModal(${player.id},'market')" class="market-qty-btn">−</button>
+      <span style="font-size:16px;font-weight:700;min-width:30px;text-align:center;">${marketState.qty}</span>
+      <button onclick="changeMarketQty(1);reopenPlayerDetailModal(${player.id},'market')" class="market-qty-btn">+</button>
     </div>
 
     ${marketState.qty > 1 ? `<div style="text-align:center;font-size:9px;color:#7d8e9e;margin-bottom:4px;">Итого: ${COIN_ICON_SM} ${formatCoins(total)}</div>` : ''}
@@ -3204,7 +3338,7 @@ function confirmFragBuy(playerId) {
     <div style="padding:10px 6px;">
       <div style="font-size:11px;font-weight:700;color:#f0a040;margin-bottom:8px;">⚠️ Подтвердить?</div>
       <div style="font-size:10px;color:#e8e8e8;margin-bottom:4px;font-weight:600;">${p.name}</div>
-      <div style="font-size:10px;color:#7d8e9e;margin-bottom:8px;">OVR ${p.ovr} · ${p.position}</div>
+      <div style="font-size:10px;color:#7d8e9e;margin-bottom:8px;">OVR ${p.ovr} • ${p.position}</div>
       <div style="font-size:12px;color:#f0a040;font-weight:700;margin-bottom:10px;">${FRAG_ICON} −${p.fragPrice}</div>
       <button onclick="doFragBuy(${p.id})"
         style="width:100%;padding:9px;background:linear-gradient(135deg,#f0a040,#d47800);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:5px;">
@@ -5117,7 +5251,7 @@ const ALL_PLAYERS_TEMPLATE = [
     { id: 852, name: 'France 22', club: 'France', nation: 'France', position: 'LW', altPositions: ['CAM'], ovr: 80, stats: { PAC:84, PAS:76, DRB:83, SHO:73, DEF:35, STR:55 }, program: 'World Tournament', image: 'https://i.ibb.co/KjKW0WZ0/image.png', squadImage: 'https://i.ibb.co/WNV86Z2h/photo-1-2026-06-25-10-49-35.jpg', trainingLevel: 0, ovrUpgrade: 0, stamina: 4, preferredFoot: 'right', weakFoot: 4, height: 181, weight: 75, league: 'International' },
     { id: 853, name: 'France 23', club: 'France', nation: 'France', position: 'ST', altPositions: [], ovr: 77, stats: { PAC:72, PAS:60, DRB:67, SHO:78, DEF:25, STR:84 }, program: 'World Tournament', image: 'https://i.ibb.co/KjKW0WZ0/image.png', squadImage: 'https://i.ibb.co/WNV86Z2h/photo-1-2026-06-25-10-49-35.jpg', trainingLevel: 0, ovrUpgrade: 0, stamina: 3.5, preferredFoot: 'right', weakFoot: 3, height: 192, weight: 88, league: 'International' },
     { id: 854, name: 'France 24', club: 'France', nation: 'France', position: 'ST', altPositions: ['LW'], ovr: 93, stats: { PAC:97, PAS:84, DRB:92, SHO:90, DEF:40, STR:77 }, program: 'World Tournament', image: 'https://i.ibb.co/KjKW0WZ0/image.png', squadImage: 'https://i.ibb.co/WNV86Z2h/photo-1-2026-06-25-10-49-35.jpg', trainingLevel: 0, ovrUpgrade: 0, stamina: 5, skill: 4.5, preferredFoot: 'right', weakFoot: 4, height: 178, weight: 75, league: 'International' },
-    { id: 855, name: 'France 25', club: 'France', nation: 'France', position: 'RW', altPositions: ['CAM'], ovr: 92, stats: { PAC:93, PAS:90, DRB:95, SHO:88, DEF:35, STR:60 }, program: 'World Tournament', image: 'https://i.ibb.co/KjKW0WZ0/image.png', squadImage: 'https://i.ibb.co/WNV86Z2h/photo-1-2026-06-25-10-49-35.jpg', trainingLevel: 0, ovrUpgrade: 0, stamina: 4, skill: 5, preferredFoot: 'left', weakFoot: 4, height: 184, weight: 76, league: 'International' },
+    { id: 855, name: 'France 25', club: 'France', nation: 'France', position: 'RW', altPositions: ['CAM','RM'], ovr: 92, stats: { PAC:93, PAS:90, DRB:95, SHO:88, DEF:35, STR:60 }, program: 'World Tournament', image: 'https://i.ibb.co/KjKW0WZ0/image.png', squadImage: 'https://i.ibb.co/WNV86Z2h/photo-1-2026-06-25-10-49-35.jpg', trainingLevel: 0, ovrUpgrade: 0, stamina: 4, skill: 5, preferredFoot: 'left', weakFoot: 4, height: 184, weight: 76, league: 'International' },
     { id: 856, name: 'France 26', club: 'France', nation: 'France', position: 'ST', altPositions: ['LW'], ovr: 82, stats: { PAC:83, PAS:72, DRB:78, SHO:82, DEF:30, STR:84 }, program: 'World Tournament', image: 'https://i.ibb.co/KjKW0WZ0/image.png', squadImage: 'https://i.ibb.co/WNV86Z2h/photo-1-2026-06-25-10-49-35.jpg', trainingLevel: 0, ovrUpgrade: 0, stamina: 4.5, preferredFoot: 'right', weakFoot: 4, height: 192, weight: 90, league: 'International' },
     // Senegal
     { id: 857, name: 'Senegal 1', club: 'Senegal', nation: 'Senegal', position: 'GK', altPositions: [], ovr: 80, stats: { REF:82, KIC:75, PAS:73, SPE:68, DIV:81, HAN:82 }, program: 'World Tournament', image: 'https://i.ibb.co/3JXjQgf/image.png', squadImage: 'https://i.ibb.co/WNV86Z2h/photo-1-2026-06-25-10-49-35.jpg', trainingLevel: 0, ovrUpgrade: 0, stamina: 3.5, preferredFoot: 'right', weakFoot: 2, height: 197, weight: 86, league: 'International' },
@@ -5622,9 +5756,19 @@ function getCurrentTactic() { return TACTICS[gameState?.squadTactic]||TACTICS[DE
 function isPositionCompatible(pPos, alt, slotPos) { return pPos===slotPos || (Array.isArray(alt)&&alt.includes(slotPos)); }
 function getSquadAverageOvr() {
   if (!gameState?.squadSlots) return 0;
-  let t=0,c=0;
-  for (let i=0;i<11;i++) { const pid=gameState.squadSlots[String(i)]; if(pid!=null){ const p=findPlayerById(pid); if(p){t+=getEffectiveOvr(p);c++;} } }
-  return c>0?Math.round(t/c):0;
+  let sumBase=0, sumUpgrade=0, c=0;
+  for (let i=0;i<11;i++) {
+    const pid=gameState.squadSlots[String(i)];
+    if(pid!=null){
+      const p=findPlayerById(pid);
+      if(p){
+        sumBase += (p.ovr||0);
+        sumUpgrade += (p.ovrUpgrade||0);
+        c++;
+      }
+    }
+  }
+  return c>0 ? Math.round(sumBase/c + sumUpgrade/c) : 0;
 }
       function getFormationKeys() {
       return Object.keys(FORMATIONS);
@@ -7846,7 +7990,6 @@ function openPlayerDetailModalById(cardId, context) {
 }
 
 // ── Тренировка ────────────────────────────────────────────────────────────
-// ── Тренировка ────────────────────────────────────────────────────────────
 function trainPlayer(cardId) {
   const idx = (gameState.myPlayers || []).findIndex(p => p.cardId === cardId);
   if (idx === -1) { showMarketToast('❌ Игрок не найден.'); return; }
@@ -9080,35 +9223,39 @@ function autoPickSquad() {
     function changeFormation(newFormation) { gameState.squadFormation = newFormation; saveState(); renderSquadModal(); }
     function assignRole(roleKey, value) { gameState[roleKey] = value ? parseInt(value) : null; saveState(); }
 
-    function getSquadAverageOvr() {
-      let total = 0, count = 0;
-      const formation = getCurrentFormation();
-      const positions = formation.positions;
-      if (gameState.squadSlots) {
-        for (let i = 0; i < 11; i++) {
-          const pid = gameState.squadSlots[String(i)];
-          if (pid != null) {
-            const player = findPlayerById(pid);
-            if (player) {
-              const penalty = getPositionPenalty(player, positions[i]);
-              const ovr = safeEffectiveOvr(player) - (penalty < 999 ? penalty : 0);
-              total += ovr;
-              count++;
-            }
-          }
+function getSquadAverageOvr() {
+  let sumBase=0, sumUpgrade=0, count=0;
+
+  if (gameState.squadSlots) {
+    for (let i=0;i<11;i++) {
+      const pid = gameState.squadSlots[String(i)];
+      if (pid != null) {
+        const player = findPlayerById(pid);
+        if (player) {
+          sumBase    += (player.ovr||0);
+          sumUpgrade += (player.ovrUpgrade||0);
+          count++;
         }
       }
-      if (gameState.benchSlots) {
-        for (let i = 0; i < 7; i++) {
-          const pid = gameState.benchSlots[String(i)];
-          if (pid != null) {
-            const player = findPlayerById(pid);
-            if (player) { total += safeEffectiveOvr(player); count++; }
-          }
-        }
-      }
-      return count > 0 ? Math.round(total / count) : 0;
     }
+  }
+
+  if (gameState.benchSlots) {
+    for (let i=0;i<7;i++) {
+      const pid = gameState.benchSlots[String(i)];
+      if (pid != null) {
+        const player = findPlayerById(pid);
+        if (player) {
+          sumBase    += (player.ovr||0);
+          sumUpgrade += (player.ovrUpgrade||0);
+          count++;
+        }
+      }
+    }
+  }
+
+  return count > 0 ? Math.round(sumBase/count + sumUpgrade/count) : 0;
+}
 
 // === END MODULE: squad management ===
 
@@ -13672,7 +13819,7 @@ function openWTLobby() {
                 : '<span style="background:rgba(255,255,255,0.15);border-radius:6px;padding:2px 8px;font-size:10px;color:#fff;">FREE</span>'}
             </div>
             <div style="font-size:11px;color:rgba(255,255,255,0.65);margin-top:3px;">
-              Уровень ${passLevel}/50 · ${passCreditsInLvl}/100 очков
+              Уровень ${passLevel}/50 • ${passCreditsInLvl}/100 очков
             </div>
           </div>
           <div style="font-size:24px;">›</div>
@@ -13692,7 +13839,7 @@ function openWTLobby() {
           <div>
             <div style="font-size:15px;font-weight:700;color:#fff;">⚽ Ячейка открытия WT</div>
             <div style="font-size:11px;color:rgba(255,255,255,0.65);margin-top:3px;">
-              OVR 94–103 · Гарант пула B: ${10-(gameState.wtCellPityB||0)} | Гарант пула A: ${75-(gameState.wtCellPityA||0)}
+              OVR 94–103 • Гарант пула B: ${10-(gameState.wtCellPityB||0)} | Гарант пула A: ${75-(gameState.wtCellPityA||0)}
             </div>
           </div>
           <div style="font-size:24px;">›</div>
@@ -14045,7 +14192,7 @@ function openWTPass() {
   // Прогресс-бар
   const progressLabel = document.createElement('div');
   progressLabel.style.cssText = 'font-size:12px;color:rgba(255,255,255,0.8);margin-bottom:4px;';
-  progressLabel.textContent = 'Уровень ' + level + '/50 · ' + creditsInLvl + '/100 до следующего уровня';
+  progressLabel.textContent = 'Уровень ' + level + '/50 • ' + creditsInLvl + '/100 до следующего уровня';
 
   const progressTrack = document.createElement('div');
   progressTrack.style.cssText = 'background:rgba(0,0,0,0.3);border-radius:6px;height:8px;';
@@ -14326,7 +14473,7 @@ function openWTPass() {
     'text-align:center',
     'flex-shrink:0'
   ].join(';');
-  hint.textContent = 'Нажми на пройденный уровень чтобы собрать награду · Нажми на заблокированный чтобы купить';
+  hint.textContent = 'Нажми на пройденный уровень чтобы собрать награду • Нажми на заблокированный чтобы купить';
 
   // ───────────────────────────────────────────
   // СБОРКА
@@ -15433,7 +15580,7 @@ async function wtShowCellResults(results) {
               <div style="font-size:16px;font-weight:900;color:#fff;">${r.player ? r.player.name : 'OVR '+r.ovr}</div>
               <div style="font-size:13px;color:#f0c040;font-weight:700;margin-top:2px;">OVR ${r.ovr}</div>
               <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:2px;">
-                ${r.player ? r.player.position+' · '+r.player.club : ''}
+                ${r.player ? r.player.position+' • '+r.player.club : ''}
               </div>
             </div>
             <div style="font-size:36px;font-weight:900;color:#f0c040;">${r.ovr}</div>
@@ -15638,8 +15785,8 @@ function openWTTrainingStep(step) {
 
   // Награда за этот шаг
   const stepReward = isMatch
-    ? `20 XP · 50 очков OVR · ${WT_TICKET_ICON} ×2`
-    : `15 XP · 150 сапфиров · ${WT_TICKET_ICON} ×1`;
+    ? `20 XP • 50 очков OVR • ${WT_TICKET_ICON} ×2`
+    : `15 XP • 150 сапфиров • ${WT_TICKET_ICON} ×1`;
 
   modal.innerHTML = `
     <div style="background:linear-gradient(135deg,#27ae60,#2980b9);
@@ -16003,12 +16150,12 @@ function wtFinishTrainingStep() {
     gameState.xp = (gameState.xp||0) + 20;
     gameState.ovrUpgradePoints = (gameState.ovrUpgradePoints||0) + 50;
     gameState.wtTickets = (gameState.wtTickets||0) + 2;
-    showMarketToast(`✅ Матч пройден! +20 XP · +50 очков OVR · ${WT_TICKET_ICON} +2`);
+    showMarketToast(`✅ Матч пройден! +20 XP • +50 очков OVR • ${WT_TICKET_ICON} +2`);
   } else {
     gameState.xp = (gameState.xp||0) + 15;
     gameState.rubins = (gameState.rubins||0) + 150;
     gameState.wtTickets = (gameState.wtTickets||0) + 1;
-    showMarketToast(`✅ Тренировка пройдена! +15 XP · +150 сапфиров · ${WT_TICKET_ICON} +1`);
+    showMarketToast(`✅ Тренировка пройдена! +15 XP • +150 сапфиров • ${WT_TICKET_ICON} +1`);
   }
 
   // Переходим к следующему шагу
@@ -16144,14 +16291,6 @@ function getMoscowDateString() {
   return `${msk.getFullYear()}-${String(msk.getMonth()+1).padStart(2,'0')}-${String(msk.getDate()).padStart(2,'0')}`;
 }
 
-// Вспомогательная функция — средний OVR состава
-function getSquadAverageOvr() {
-  if (!gameState.squad || !gameState.squad.length) return 75;
-  const players = gameState.squad.map(id => (gameState.myPlayers||[]).find(p => p.cardId === id)).filter(Boolean);
-  if (!players.length) return 75;
-  return Math.round(players.reduce((s,p) => s + (p.ovr + (p.ovrUpgrade||0)), 0) / players.length);
-}
-
 // ── ТУРНЕ ─────────────────────────────────────────────────────────────────
 function openWTTour() {
   const old = document.getElementById('wt-tour-modal');
@@ -16189,7 +16328,7 @@ function openWTTour() {
         </div>
       </div>
       <div style="font-size:11px;color:rgba(255,255,255,0.7);text-align:center;">
-        Особые игроки World Tournament Moments · 200 очков за игрока
+        Особые игроки World Tournament Moments • 200 очков за игрока
       </div>
     </div>
 
@@ -16438,7 +16577,7 @@ function renderQuestsModal() {
       if (q.rewards.ovrUpgradePoints)  rewardParts.push(`⬆️ ${q.rewards.ovrUpgradePoints} OVR`);
       if (q.rewards.trainingPoints)    rewardParts.push(`🏋️ ${q.rewards.trainingPoints}`);
       if (q.rewards.playerWt)          rewardParts.push(`⚽ Игрок WT ${q.rewards.playerWt.minOvr}-${q.rewards.playerWt.maxOvr}`);
-      const rewardStr = rewardParts.join(' · ');
+      const rewardStr = rewardParts.join(' • ');
 
       html += `<div style="background:rgba(192,57,43,0.08);border:1px solid ${isDone ? '#c0392b44' : '#1e2d3d'};
         border-radius:10px;padding:10px 12px;margin-bottom:8px;">
@@ -16476,7 +16615,7 @@ function renderQuestsModal() {
       border-radius:12px;padding:12px;margin-top:4px;">
       <div style="font-size:14px;font-weight:700;margin-bottom:4px;">🏆 Бонус: Все квесты WT</div>
       <div style="font-size:11px;color:#7d8e9e;margin-bottom:8px;">
-        Выполни все 5 квестов — 120 XP · 200 очк. абонемента · ⚽ Игрок WT OVR 100
+        Выполни все 5 квестов — 120 XP • 200 очк. абонемента • ⚽ Игрок WT OVR 100
       </div>
       <div style="background:#0e1621;border-radius:4px;height:6px;overflow:hidden;margin-bottom:8px;">
         <div style="height:100%;width:${wtCompletedCount * 20}%;
@@ -16582,7 +16721,7 @@ function buildQuestRewardStr(rewards, iXP, iRuby) {
   if (rewards.xp)          parts.push(`${iXP} ${rewards.xp} XP`);
   if (rewards.rubins)      parts.push(`${iRuby} ${rewards.rubins} сапф.`);
   if (rewards.passCredits) parts.push(`${iPass} ${rewards.passCredits} прогр.`);
-  return parts.join(' · ');
+  return parts.join(' • ');
 }
 
 // ── Забрать награду за квест ──────────────────────────────────────────────

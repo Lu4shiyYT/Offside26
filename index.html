@@ -4208,11 +4208,14 @@ const NATION_REGISTRY = {
   'ZAM': { name: 'Zambia',                     logo: 'https://flagcdn.com/w40/zm.png' },
   'ZIM': { name: 'Zimbabwe',                   logo: 'https://flagcdn.com/w40/zw.png' },
   'INT': { name: 'International',              logo: 'https://flagcdn.com/w40/un.png' },
+  'ICO': { name: 'Icons',                      logo: 'https://flagcdn.com/w40/un.png' },
 };
 
 // ── КЛУБЫ (по умолчанию логотип = флаг страны) ───────────────────
 // Добавляй новые клубы сюда. natId — ID нации для дефолтного логотипа
 let CLUB_REGISTRY = {
+  'ICON': { name: 'Icon',        natId: 'ICO',  logo: 'https://flagcdn.com/w40/un.png' },
+  'MAESTRO': { name: 'Maestro',        natId: 'ICO',  logo: 'https://flagcdn.com/w40/un.png' },
   'CLUB1':  { name: 'Mexico',         natId: 'MEX', logo: 'https://flagcdn.com/w40/mx.png' },
   'CLUB2':  { name: 'South Africa',   natId: 'RSA', logo: 'https://flagcdn.com/w40/za.png' },
   'CLUB3':  { name: 'South Korea',    natId: 'KOR', logo: 'https://flagcdn.com/w40/kr.png' },
@@ -4265,6 +4268,7 @@ let CLUB_REGISTRY = {
 
 // ── ЛИГИ ─────────────────────────────────────────────────────────
 let LEAGUE_REGISTRY = {
+  'LEG_ICO': { name: 'Icons', logo: 'https://flagcdn.com/w40/un.png' },
   'LEG1': { name: 'International', logo: 'https://flagcdn.com/w40/un.png' },
 };
 
@@ -4360,7 +4364,7 @@ document.getElementById('nav-events').addEventListener('click', function() { han
 document.getElementById('nav-division').addEventListener('click', function() { handleNavDivision(); });
 
 // ========== MODULE: GAMESTATE & DATA ==========
-const ALL_PLAYERS_TEMPLATE_VERSION = 17;
+const ALL_PLAYERS_TEMPLATE_VERSION = 18;
 const ALL_PLAYERS_TEMPLATE = [
     // Событие World Tournament 
     // Мексика
@@ -5643,7 +5647,9 @@ const ALL_PLAYERS_TEMPLATE = [
     { id: 1228, name: 'Panama 23', club: 'Panama', nation: 'Panama', position: 'ST', altPositions: ['LW'], ovr: 72, stats: { PAC:78, PAS:65, DRB:70, SHO:70, DEF:30, STR:60 }, program: 'World Tournament', image: 'https://i.ibb.co/JFx2mxx1/image.png', squadImage: 'https://i.ibb.co/WNV86Z2h/photo-1-2026-06-25-10-49-35.jpg', trainingLevel: 0, ovrUpgrade: 0, stamina: 4, preferredFoot: 'right', weakFoot: 3, height: 180, weight: 75, league: 'International' },
     { id: 1229, name: 'Panama 24', club: 'Panama', nation: 'Panama', position: 'ST', altPositions: [], ovr: 70, stats: { PAC:65, PAS:58, DRB:62, SHO:70, DEF:25, STR:74 }, program: 'World Tournament', image: 'https://i.ibb.co/JFx2mxx1/image.png', squadImage: 'https://i.ibb.co/WNV86Z2h/photo-1-2026-06-25-10-49-35.jpg', trainingLevel: 0, ovrUpgrade: 0, stamina: 3.5, preferredFoot: 'right', weakFoot: 3, height: 182, weight: 78, league: 'International' },
     { id: 1230, name: 'Panama 25', club: 'Panama', nation: 'Panama', position: 'ST', altPositions: [], ovr: 69, stats: { PAC:70, PAS:58, DRB:62, SHO:68, DEF:25, STR:70 }, program: 'World Tournament', image: 'https://i.ibb.co/JFx2mxx1/image.png', squadImage: 'https://i.ibb.co/WNV86Z2h/photo-1-2026-06-25-10-49-35.jpg', trainingLevel: 0, ovrUpgrade: 0, stamina: 3.5, preferredFoot: 'right', weakFoot: 3, height: 187, weight: 80, league: 'International' },
-    { id: 1231, name: 'Panama 26', club: 'Panama', nation: 'Panama', position: 'RW', altPositions: ['RM'], ovr: 67, stats: { PAC:75, PAS:60, DRB:68, SHO:58, DEF:30, STR:55 }, program: 'World Tournament', image: 'https://i.ibb.co/JFx2mxx1/image.png', squadImage: 'https://i.ibb.co/WNV86Z2h/photo-1-2026-06-25-10-49-35.jpg', trainingLevel: 0, ovrUpgrade: 0, stamina: 3.5, preferredFoot: 'left', weakFoot: 3, height: 173, weight: 69, league: 'International' }
+    { id: 1231, name: 'Panama 26', club: 'Panama', nation: 'Panama', position: 'RW', altPositions: ['RM'], ovr: 67, stats: { PAC:75, PAS:60, DRB:68, SHO:58, DEF:30, STR:55 }, program: 'World Tournament', image: 'https://i.ibb.co/JFx2mxx1/image.png', squadImage: 'https://i.ibb.co/WNV86Z2h/photo-1-2026-06-25-10-49-35.jpg', trainingLevel: 0, ovrUpgrade: 0, stamina: 3.5, preferredFoot: 'left', weakFoot: 3, height: 173, weight: 69, league: 'International' },
+    { id: 1232, name: 'South Korea Icon 1', club: 'Icon', nation: 'South Korea', position: 'RW', altPositions: ['ST','LW','RM'], ovr: 103, stats: { PAC:107, PAS:98, DRB:104, SHO:103, DEF:56, STR:77 }, program: 'Icon', image: 'https://i.ibb.co/cS9RFXpR/South-Korea.png', squadImage: 'https://i.ibb.co/VYGJj50J/image.png', trainingLevel: 0, ovrUpgrade: 0, stamina: 4.5, preferredFoot: 'right', weakFoot: 4, height: 179, weight: 78, league: 'Icon' },
+  
 ];
 
 // Простановка tradeable по умолчанию (если не задано явно)
